@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export async function POST(req: Request) {
   try {
@@ -9,51 +10,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
     }
 
+    // שימוש במפתח ה-API של הבוט (AI Studio)
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
+    // משתמשים ב-Gemini 1.5 Flash - המודל הכי מהיר ומדויק למשימה הזאת
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
     const arrayBuffer = await file.arrayBuffer();
-    const audioContent = Buffer.from(arrayBuffer).toString('base64');
-    const apiKey = process.env.GOOGLE_API_KEY;
+    const base64Audio = Buffer.from(arrayBuffer).toString('base64');
 
-    const response = await fetch(
-      `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`,
+    const prompt = `
+      תמלל את האודיו המצורף בצורה מדויקת מילה במילה.
+      החזר את התוצאה בפורמט JSON בלבד, שבו לכל מילה יש:
+      1. את המילה עצמה (word).
+      2. זמן התחלה בשניות (start).
+      3. זמן סיום בשניות (end).
+      אל תוסיף הסברים, רק את ה-JSON.
+    `;
+
+    const result = await model.generateContent([
+      prompt,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          config: {
-            encoding: 'MP3',
-            languageCode: 'he-IL',
-            enableWordTimeOffsets: true,
-          },
-          audio: {
-            content: audioContent,
-          },
-        }),
+        inlineData: {
+          mimeType: "audio/mp3",
+          data: base64Audio
+        }
       }
-    );
+    ]);
 
-    const data = await response.json();
+    const responseText = result.response.text();
+    // ניקוי המעטפת של ה-JSON אם המודל הוסיף אותה
+    const cleanJson = responseText.replace(/```json|```/g, "").trim();
+    const transcriptionData = JSON.parse(cleanJson);
 
-    // אם גוגל החזירה שגיאה - אנחנו מעבירים אותה ל-Frontend
-    if (data.error) {
-      return NextResponse.json({ error: data.error.message, code: data.error.code }, { status: 500 });
-    }
-
-    if (!data.results) {
-      return NextResponse.json({ transcription: [] });
-    }
-    
-    const transcription = data.results.map((result: any) => ({
-      text: result.alternatives[0].transcript,
-      words: result.alternatives[0].words.map((w: any) => ({
-        word: w.word,
-        start: parseFloat(w.startTime.replace('s', '')),
-        end: parseFloat(w.endTime.replace('s', '')),
-      }))
-    }));
-
-    return NextResponse.json({ transcription });
+    // התאמה למבנה שה-Frontend שלך מצפה לו
+    return NextResponse.json({ transcription: transcriptionData });
 
   } catch (error: any) {
+    console.error("Gemini Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

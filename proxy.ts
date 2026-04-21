@@ -2,28 +2,24 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function proxy(request: NextRequest) {
-  const session = request.cookies.get('session_access')?.value
   const { pathname } = request.nextUrl
+  const session = request.cookies.get('session_access')?.value
 
-  // מאפשר גישה חופשית ללוגין ולאימות
-  if (
-    pathname.startsWith('/_next') || 
-    pathname.startsWith('/api/auth') || 
-    pathname.startsWith('/login') ||
-    pathname.includes('.')
-  ) {
+  // אם אנחנו כבר בדף לוגין או ב-API, אל תעשה כלום
+  if (pathname.startsWith('/login') || pathname.startsWith('/api') || pathname.includes('.')) {
     return NextResponse.next()
   }
 
-  // אם אין סיסמה תקינה, זרוק ללוגין
+  // אם אין סשן, תפנה ללוגין
   if (!session || session !== process.env.ADMIN_PASSWORD) {
+    console.log("Redirecting to login from:", pathname)
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
   return NextResponse.next()
 }
 
-// חשוב: בגרסה הזו מייצאים את הקונפיג ככה
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  //Matcher מעודכן ל-2026
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }

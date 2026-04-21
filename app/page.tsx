@@ -89,9 +89,12 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#050505] text-white font-sans flex flex-col items-center py-12 px-6">
       
-      {/* Header - לוגו ממורכז ונקי */}
-      <header className="w-full max-w-2xl flex justify-center items-center mb-16">
-        <Image src="/logo.png" alt="deVee Dubber" width={90} height={30} className="opacity-80" />
+      {/* Header - לוגו עם כיתוב Reels Dubber */}
+      <header className="w-full max-w-2xl flex flex-col items-center mb-16 space-y-2">
+        <Image src="/logo.png" alt="deVee" width={90} height={30} className="opacity-80" />
+        <span className="text-[10px] tracking-[0.3em] text-white/40 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+          REELS DUBBER
+        </span>
       </header>
 
       {/* Main Stack */}

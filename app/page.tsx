@@ -14,8 +14,10 @@ export default function Home() {
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
+  const [currentTime, setCurrentTime] = useState(0); // עוקב אחרי זמן הנגן
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null); // רפרנס לנגן
   const ffmpegRef = useRef<any>(null);
 
   const loadFFmpeg = async () => {
@@ -46,13 +48,11 @@ export default function Home() {
     const { fetchFile } = await import('@ffmpeg/util');
 
     try {
-      // 1. חילוץ אודיו
       await ffmpeg.writeFile('input_video', await fetchFile(file));
       await ffmpeg.exec(['-i', 'input_video', '-vn', '-ab', '128k', 'output_audio.mp3']);
       const data = await ffmpeg.readFile('output_audio.mp3');
       const audioBlob = new Blob([data as any], { type: 'audio/mp3' });
 
-      // 2. שליחה ל-API המאובטח
       const formData = new FormData();
       formData.append('audio', audioBlob);
 
@@ -63,26 +63,39 @@ export default function Home() {
 
       const result = await response.json();
       
-      // לוג קריטי לאבחון הבעיה
       console.log('--- Google Sync Report ---');
       console.log('Status:', response.status);
       console.log('Payload:', result);
 
       if (result.transcription) {
-        const allWords = result.transcription.flatMap((t: any) => t.words);
+        // במידה וה-API מחזיר מבנה מקונן, אנחנו משטחים אותו למערך מילים אחד
+        const allWords = Array.isArray(result.transcription[0]?.words) 
+          ? result.transcription[0].words 
+          : result.transcription.flatMap((t: any) => t.words);
         setTranscription(allWords);
         setIsDubbing(false);
       } else {
-        // אם השרת החזיר שגיאה מגוגל, נשתמש בה
         throw new Error(result.error || 'Transcription failed');
       }
 
     } catch (error: any) {
       console.error('DUB Error:', error);
       setIsDubbing(false);
-      // מציג למשתמש את השגיאה הספציפית מגוגל
       alert(`Debug: ${error.message}`);
     }
+  };
+
+  // פונקציה לעדכון מילה בטיימליין
+  const handleWordEdit = (index: number, newText: string) => {
+    const updated = [...transcription];
+    updated[index].word = newText;
+    setTranscription(updated);
+  };
+
+  // פונקציה למחיקת מילה מהטיימליין
+  const handleWordDelete = (index: number) => {
+    const updated = transcription.filter((_, i) => i !== index);
+    setTranscription(updated);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -163,7 +176,13 @@ export default function Home() {
       <div className="w-full max-w-2xl space-y-8">
         <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
           {videoPreview ? (
-            <video src={videoPreview} controls className="w-full h-full object-contain" />
+            <video 
+              ref={videoRef}
+              src={videoPreview} 
+              controls 
+              className="w-full h-full object-contain"
+              onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
+            />
           ) : (
             <div onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center space-y-4 cursor-pointer group">
               <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center text-white/10 group-hover:text-[#A855F7] transition-colors text-lg">+</div>
@@ -178,12 +197,29 @@ export default function Home() {
             <span className="text-[7px] uppercase tracking-[0.3em] text-white/20 font-bold">Monitor</span>
             <span className="text-[7px] uppercase tracking-[0.3em] text-[#A855F7] font-black">Timeline</span>
           </div>
-          <div className="h-16 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-2 flex gap-1 items-center overflow-x-auto no-scrollbar">
+          <div className="h-20 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-2 flex gap-2 items-center overflow-x-auto no-scrollbar">
             {transcription.length > 0 ? (
               transcription.map((item, i) => (
-                <div key={i} className="h-full min-w-[90px] bg-[#A855F7]/10 border border-[#A855F7]/20 rounded-lg flex flex-col items-center justify-center p-2 relative hover:bg-[#A855F7]/20 transition-all">
-                  <span className="text-[9px] text-white font-bold leading-tight">{item.word}</span>
-                  <span className="text-[6px] text-white/30 absolute bottom-1">{item.start.toFixed(1)}s</span>
+                <div 
+                  key={i} 
+                  className={`h-full min-w-[100px] border rounded-lg flex flex-col items-center justify-center p-2 relative transition-all duration-200 ${
+                    currentTime >= item.start && currentTime <= item.end 
+                    ? 'bg-[#A855F7]/30 border-[#A855F7]' 
+                    : 'bg-[#A855F7]/5 border-[#A855F7]/10'
+                  }`}
+                >
+                  <input 
+                    value={item.word}
+                    onChange={(e) => handleWordEdit(i, e.target.value)}
+                    className="bg-transparent border-none outline-none text-[10px] text-white font-bold text-center w-full focus:text-[#A855F7]"
+                  />
+                  <button 
+                    onClick={() => handleWordDelete(i)}
+                    className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500/50 hover:bg-red-500 rounded-full text-[7px] flex items-center justify-center transition-colors"
+                  >
+                    ✕
+                  </button>
+                  <span className="text-[6px] text-white/20 absolute bottom-1">{item.start.toFixed(1)}s</span>
                 </div>
               ))
             ) : (

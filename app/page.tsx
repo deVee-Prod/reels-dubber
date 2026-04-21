@@ -51,12 +51,12 @@ export default function Home() {
       await ffmpeg.writeFile('input_video', await fetchFile(file));
 
       // 2. פקודת FFmpeg לחילוץ אודיו ל-MP3
-      // -i: קלט, -vn: בלי וידאו, -ab: איכות סאונד
       await ffmpeg.exec(['-i', 'input_video', '-vn', '-ab', '128k', 'output_audio.mp3']);
 
-      // 3. קריאת קובץ האודיו שנוצר
+      // 3. קריאת קובץ האודיו שנוצר עם תיקון ה-Type
       const data = await ffmpeg.readFile('output_audio.mp3');
-      const audioBlob = new Blob([data], { type: 'audio/mp3' });
+      // התיקון כאן: שימוש ב-as any כדי למנוע שגיאת TypeScript ב-Build
+      const audioBlob = new Blob([data as any], { type: 'audio/mp3' });
       
       console.log('Audio Extracted Successfully!', audioBlob);
       
@@ -187,7 +187,7 @@ export default function Home() {
           </button>
           
           <p className="text-[7px] tracking-[0.2em] text-white/10 uppercase italic text-center max-w-[200px]">
-             Neural engine will extract and sync audio automatically
+              Neural engine will extract and sync audio automatically
           </p>
         </div>
       </div>

@@ -2,9 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-// ייבוא של FFmpeg
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 export default function Home() {
   const [authorized, setAuthorized] = useState(false);
@@ -17,14 +14,20 @@ export default function Home() {
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const ffmpegRef = useRef(new FFmpeg());
+  
+  // אנחנו מגדירים את ה-Ref כ-null בהתחלה כדי שלא ירוץ בשרת
+  const ffmpegRef = useRef<any>(null);
 
-  // טעינת מנוע ה-FFmpeg
   const loadFFmpeg = async () => {
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-    const ffmpeg = ffmpegRef.current;
+    // טעינה דינמית של הספריות רק כשמריצים את הפונקציה (בדפדפן)
+    const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+    const { toBlobURL } = await import('@ffmpeg/util');
     
-    // טעינת קבצי הליבה של המנוע
+    const ffmpeg = new FFmpeg();
+    ffmpegRef.current = ffmpeg;
+    
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
@@ -35,32 +38,26 @@ export default function Home() {
   useEffect(() => {
     if (document.cookie.includes('session_access')) {
       setAuthorized(true);
-      loadFFmpeg(); // טוען את המנוע ברגע שיש גישה
+      loadFFmpeg();
     }
   }, []);
 
-  // לוגיקת החילוץ והדיבוב
   const handleDub = async () => {
-    if (!file || !ffmpegLoaded) return;
+    if (!file || !ffmpegLoaded || !ffmpegRef.current) return;
     
     setIsDubbing(true);
     const ffmpeg = ffmpegRef.current;
+    const { fetchFile } = await import('@ffmpeg/util');
 
     try {
-      // 1. כתיבת הקובץ לזיכרון של FFmpeg
       await ffmpeg.writeFile('input_video', await fetchFile(file));
-
-      // 2. פקודת FFmpeg לחילוץ אודיו ל-MP3
       await ffmpeg.exec(['-i', 'input_video', '-vn', '-ab', '128k', 'output_audio.mp3']);
 
-      // 3. קריאת קובץ האודיו שנוצר עם תיקון ה-Type
       const data = await ffmpeg.readFile('output_audio.mp3');
-      // התיקון כאן: שימוש ב-as any כדי למנוע שגיאת TypeScript ב-Build
       const audioBlob = new Blob([data as any], { type: 'audio/mp3' });
       
       console.log('Audio Extracted Successfully!', audioBlob);
       
-      // כאן בהמשך נשלח את ה-audioBlob ל-API של הדיבוב
       setTimeout(() => {
         setIsDubbing(false);
         alert('Audio extracted! Ready for Neural Sync.');

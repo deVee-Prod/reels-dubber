@@ -22,9 +22,8 @@ export default function LoginPage() {
       });
 
       if (res.ok) {
-        // רענון קל כדי שה-Proxy יזהה את העוגייה החדשה
-        router.push('/');
-        router.refresh();
+        // שינוי כאן: שימוש ב-window.location כדי להכריח את ה-Proxy לזהות את העוגייה
+        window.location.href = '/';
       } else {
         setError(true);
         setPassword('');

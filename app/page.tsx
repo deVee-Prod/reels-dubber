@@ -14,10 +14,10 @@ export default function Home() {
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
-  const [currentTime, setCurrentTime] = useState(0); // עוקב אחרי זמן הנגן
+  const [currentTime, setCurrentTime] = useState(0); 
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null); // רפרנס לנגן
+  const videoRef = useRef<HTMLVideoElement>(null); 
   const ffmpegRef = useRef<any>(null);
 
   const loadFFmpeg = async () => {
@@ -63,12 +63,7 @@ export default function Home() {
 
       const result = await response.json();
       
-      console.log('--- Google Sync Report ---');
-      console.log('Status:', response.status);
-      console.log('Payload:', result);
-
       if (result.transcription) {
-        // במידה וה-API מחזיר מבנה מקונן, אנחנו משטחים אותו למערך מילים אחד
         const allWords = Array.isArray(result.transcription[0]?.words) 
           ? result.transcription[0].words 
           : result.transcription.flatMap((t: any) => t.words);
@@ -79,23 +74,26 @@ export default function Home() {
       }
 
     } catch (error: any) {
-      console.error('DUB Error:', error);
       setIsDubbing(false);
       alert(`Debug: ${error.message}`);
     }
   };
 
-  // פונקציה לעדכון מילה בטיימליין
   const handleWordEdit = (index: number, newText: string) => {
     const updated = [...transcription];
     updated[index].word = newText;
     setTranscription(updated);
   };
 
-  // פונקציה למחיקת מילה מהטיימליין
   const handleWordDelete = (index: number) => {
     const updated = transcription.filter((_, i) => i !== index);
     setTranscription(updated);
+  };
+
+  const getCurrentWord = () => {
+    return transcription.find(
+      (w) => currentTime >= w.start && currentTime <= w.end
+    );
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -176,13 +174,25 @@ export default function Home() {
       <div className="w-full max-w-2xl space-y-8">
         <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
           {videoPreview ? (
-            <video 
-              ref={videoRef}
-              src={videoPreview} 
-              controls 
-              className="w-full h-full object-contain"
-              onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
-            />
+            <div className="relative w-full h-full">
+              <video 
+                ref={videoRef}
+                src={videoPreview} 
+                controls 
+                className="w-full h-full object-contain"
+                onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
+              />
+              <div className="absolute bottom-[15%] left-0 right-0 flex justify-center pointer-events-none px-6 text-center">
+                 {getCurrentWord() && (
+                   <span 
+                    className="text-white text-4xl font-black drop-shadow-[0_4px_12px_rgba(0,0,0,1)] uppercase tracking-tight" 
+                    style={{ fontFamily: 'Heebo, sans-serif' }}
+                   >
+                     {getCurrentWord().word}
+                   </span>
+                 )}
+              </div>
+            </div>
           ) : (
             <div onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center space-y-4 cursor-pointer group">
               <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center text-white/10 group-hover:text-[#A855F7] transition-colors text-lg">+</div>

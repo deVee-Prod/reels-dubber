@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 
 export default function Home() {
   const [authorized, setAuthorized] = useState(false);
@@ -13,13 +14,10 @@ export default function Home() {
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
-  const [currentTime, setCurrentTime] = useState(0);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const ffmpegRef = useRef<any>(null);
 
-  // טעינת FFmpeg
   const loadFFmpeg = async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
     const { toBlobURL } = await import('@ffmpeg/util');
@@ -34,24 +32,27 @@ export default function Home() {
   };
 
   useEffect(() => {
-    loadFFmpeg();
+    if (document.cookie.includes('session_access')) {
+      setAuthorized(true);
+      loadFFmpeg();
+    }
   }, []);
 
-  // הפונקציה שהייתה חסרה וגרמה לשגיאה!
   const handleDub = async () => {
-    if (!file) return;
+    if (!file || !ffmpegLoaded || !ffmpegRef.current) return;
+    
     setIsDubbing(true);
+    const ffmpeg = ffmpegRef.current;
+    const { fetchFile } = await import('@ffmpeg/util');
 
     try {
-      // 1. חילוץ אודיו מהוידאו בעזרת FFmpeg
-      const ffmpeg = ffmpegRef.current;
-      const inputData = await file.arrayBuffer();
-      await ffmpeg.writeFile('input.mp4', new Uint8Array(inputData));
-      await ffmpeg.exec(['-i', 'input.mp4', '-vn', '-acodec', 'libmp3lame', '-ar', '16000', 'output.mp3']);
-      const outputData = await ffmpeg.readFile('output.mp3');
-      const audioBlob = new Blob([outputData], { type: 'audio/mp3' });
+      // 1. חילוץ אודיו
+      await ffmpeg.writeFile('input_video', await fetchFile(file));
+      await ffmpeg.exec(['-i', 'input_video', '-vn', '-ab', '128k', 'output_audio.mp3']);
+      const data = await ffmpeg.readFile('output_audio.mp3');
+      const audioBlob = new Blob([data as any], { type: 'audio/mp3' });
 
-      // 2. שליחה ל-API שלנו (שעובד עם gemini-2.5-flash)
+      // 2. שליחה ל-API המאובטח
       const formData = new FormData();
       formData.append('audio', audioBlob);
 
@@ -60,131 +61,160 @@ export default function Home() {
         body: formData,
       });
 
-      const data = await response.json();
-      if (data.transcription) {
-        setTranscription(data.transcription);
+      const result = await response.json();
+      
+      // לוג קריטי לאבחון הבעיה
+      console.log('--- Google Sync Report ---');
+      console.log('Status:', response.status);
+      console.log('Payload:', result);
+
+      if (result.transcription) {
+        const allWords = result.transcription.flatMap((t: any) => t.words);
+        setTranscription(allWords);
+        setIsDubbing(false);
+      } else {
+        // אם השרת החזיר שגיאה מגוגל, נשתמש בה
+        throw new Error(result.error || 'Transcription failed');
       }
-    } catch (error) {
-      console.error('Dubbing error:', error);
-    } finally {
+
+    } catch (error: any) {
+      console.error('DUB Error:', error);
       setIsDubbing(false);
+      // מציג למשתמש את השגיאה הספציפית מגוגל
+      alert(`Debug: ${error.message}`);
     }
   };
 
-  const handleWordEdit = (index: number, newText: string) => {
-    const updated = [...transcription];
-    if (updated[0]?.words) {
-      updated[0].words[index].word = newText;
-      setTranscription(updated);
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        setAuthorized(true);
+        loadFFmpeg();
+      } else {
+        setLoginError(true);
+        setPassword('');
+        setTimeout(() => setLoginError(false), 2000);
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+    } finally {
+      setLoginLoading(false);
     }
   };
 
-  const handleWordDelete = (index: number) => {
-    const updated = [...transcription];
-    if (updated[0]?.words) {
-      updated[0].words.splice(index, 1);
-      setTranscription(updated);
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const uploadedFile = e.target.files?.[0];
+    if (uploadedFile) {
+      setFile(uploadedFile);
+      setVideoPreview(URL.createObjectURL(uploadedFile));
+      setTranscription([]); 
     }
-  };
-
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
-    }
-  };
-
-  const getCurrentWord = () => {
-    if (!transcription[0]?.words) return null;
-    return transcription[0].words.find(
-      (w: any) => currentTime >= w.start && currentTime <= w.end
-    );
   };
 
   if (!authorized) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="w-full max-w-sm space-y-8 text-center">
-          <h1 className="text-[10px] tracking-[0.5em] text-white/20 uppercase font-black">Secure Access</h1>
-          <input 
-            type="password" 
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="ENTER PASSCODE"
-            className="w-full bg-white/[0.02] border border-white/10 rounded-2xl px-6 py-4 text-center text-sm tracking-widest focus:border-[#A855F7]/50 outline-none transition-all"
-          />
-          <button 
-            onClick={() => {
-              if (password === '1008') setAuthorized(true);
-              else setLoginError(true);
-            }}
-            className="w-full bg-white text-black py-4 rounded-2xl text-[10px] font-black tracking-[0.3em] hover:bg-[#A855F7] hover:text-white transition-all"
-          >
-            VERIFY IDENTITY
-          </button>
+      <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-between p-8">
+        <div />
+        <div className="w-full max-w-[340px] flex flex-col items-center space-y-10">
+          <div className="flex flex-col items-center space-y-4">
+            <Image src="/logo.png" alt="deVee" width={100} height={32} />
+            <h2 className="text-[9px] tracking-[0.5em] uppercase text-[#A855F7]/80 font-bold italic">Private Studio Access</h2>
+          </div>
+          <div className="w-full bg-[#0c0c0c]/40 border border-white/[0.04] rounded-[24px] p-8 backdrop-blur-xl">
+            <form onSubmit={handleLogin} className="flex flex-col space-y-4">
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`w-full bg-white/[0.02] border ${loginError ? 'border-red-500/30' : 'border-white/5'} rounded-xl py-3 px-4 text-white focus:outline-none focus:border-[#A855F7]/30 transition-all text-center tracking-[0.4em] text-[11px]`}
+                placeholder="ACCESS KEY"
+              />
+              <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">
+                {loginLoading ? 'Verifying...' : 'Enter Studio'}
+              </button>
+            </form>
+          </div>
         </div>
-      </div>
+        <footer className="flex flex-col items-center space-y-3 pb-4">
+          <span className="text-[9px] tracking-[0.1em] text-white/40 font-light">Powered By deVee Boutique Label</span>
+          <Image src="/label_logo.jpg" alt="deVee Label" width={32} height={32} className="rounded-full opacity-60" />
+        </footer>
+      </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-black text-white flex flex-col items-center px-4 py-10">
-      <div className="w-full max-w-lg space-y-10">
-        <div className="relative aspect-[9/16] bg-white/[0.02] border border-white/5 rounded-[28px] overflow-hidden shadow-2xl">
+    <main className="min-h-screen bg-[#050505] text-white font-sans flex flex-col items-center py-12 px-6">
+      
+      <header className="w-full max-w-2xl flex flex-col items-center mb-16 space-y-2">
+        <Image src="/logo.png" alt="deVee" width={90} height={30} className="opacity-80" />
+        <span className="text-[10px] tracking-[0.3em] text-white/40 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+          REELS DUBBER
+        </span>
+      </header>
+
+      <div className="w-full max-w-2xl space-y-8">
+        <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
           {videoPreview ? (
-            <>
-              <video 
-                ref={videoRef}
-                src={videoPreview} 
-                className="w-full h-full object-cover"
-                onTimeUpdate={handleTimeUpdate}
-                controls
-              />
-              <div className="absolute bottom-[15%] left-0 right-0 flex justify-center pointer-events-none px-6">
-                 {getCurrentWord() && (
-                   <span className="text-white text-3xl font-black text-center drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]" style={{ fontFamily: 'Heebo, sans-serif' }}>
-                     {getCurrentWord().word}
-                   </span>
-                 )}
-              </div>
-            </>
+            <video src={videoPreview} controls className="w-full h-full object-contain" />
           ) : (
-            <div onClick={() => fileInputRef.current?.click()} className="h-full w-full cursor-pointer flex flex-col items-center justify-center space-y-4">
-              <span className="text-[8px] tracking-[0.3em] text-white/20 uppercase">Upload Video</span>
+            <div onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center space-y-4 cursor-pointer group">
+              <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center text-white/10 group-hover:text-[#A855F7] transition-colors text-lg">+</div>
+              <p className="text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold">Upload Media</p>
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
             </div>
           )}
-          <input type="file" ref={fileInputRef} onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) {
-              setFile(f);
-              setVideoPreview(URL.createObjectURL(f));
-            }
-          }} accept="video/*" className="hidden" />
         </div>
 
-        <div className="min-h-[100px] w-full bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-wrap gap-2">
-          {transcription[0]?.words?.map((item: any, index: number) => (
-            <div key={index} className={`relative group flex items-center bg-[#A855F7]/10 border border-[#A855F7]/20 px-3 py-1.5 rounded-lg ${currentTime >= item.start && currentTime <= item.end ? 'ring-1 ring-[#A855F7]' : ''}`}>
-              <input 
-                value={item.word}
-                onChange={(e) => handleWordEdit(index, e.target.value)}
-                className="bg-transparent border-none outline-none text-[10px] font-bold text-white w-auto text-center"
-                style={{ width: `${item.word.length + 1}ch` }}
-              />
-              <button onClick={() => handleWordDelete(index)} className="ml-2 opacity-0 group-hover:opacity-100 text-white/40 hover:text-red-400 text-[8px]">✕</button>
-            </div>
-          )) || <div className="text-[7px] uppercase tracking-widest text-white/10 w-full text-center py-6">Waiting for source...</div>}
+        <div className="w-full space-y-3">
+          <div className="flex justify-between items-center px-2">
+            <span className="text-[7px] uppercase tracking-[0.3em] text-white/20 font-bold">Monitor</span>
+            <span className="text-[7px] uppercase tracking-[0.3em] text-[#A855F7] font-black">Timeline</span>
+          </div>
+          <div className="h-16 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-2 flex gap-1 items-center overflow-x-auto no-scrollbar">
+            {transcription.length > 0 ? (
+              transcription.map((item, i) => (
+                <div key={i} className="h-full min-w-[90px] bg-[#A855F7]/10 border border-[#A855F7]/20 rounded-lg flex flex-col items-center justify-center p-2 relative hover:bg-[#A855F7]/20 transition-all">
+                  <span className="text-[9px] text-white font-bold leading-tight">{item.word}</span>
+                  <span className="text-[6px] text-white/30 absolute bottom-1">{item.start.toFixed(1)}s</span>
+                </div>
+              ))
+            ) : (
+              <div className="w-full text-center text-[7px] uppercase tracking-[0.4em] text-white/5">
+                {isDubbing ? 'Generating Neural Timeline...' : 'Waiting for source...'}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center space-y-6 pt-4">
           <button 
             onClick={handleDub}
             disabled={!file || isDubbing || !ffmpegLoaded}
-            className={`px-14 py-3.5 rounded-full uppercase tracking-[0.4em] text-[8px] font-black transition-all ${file && !isDubbing && ffmpegLoaded ? 'bg-[#A855F7] text-white' : 'bg-white/5 text-white/10'}`}
+            className={`px-14 py-3.5 rounded-full uppercase tracking-[0.4em] text-[8px] font-black transition-all ${
+              file && !isDubbing && ffmpegLoaded ? 'bg-[#A855F7] text-white shadow-[0_0_40px_rgba(168,85,247,0.25)] hover:scale-105' : 'bg-white/[0.02] text-white/10 border border-white/5'
+            }`}
           >
-            {isDubbing ? 'Syncing...' : 'DUB!'}
+            {!ffmpegLoaded ? 'Loading Engine...' : isDubbing ? 'Syncing...' : 'DUB!'}
           </button>
+          
+          <p className="text-[7px] tracking-[0.2em] text-white/10 uppercase italic text-center max-w-[200px]">
+              Neural engine will process speech and sync timeline automatically
+          </p>
         </div>
       </div>
+
+      <footer className="mt-auto pt-20 pb-4 flex flex-col items-center space-y-3">
+        <span className="text-[9px] tracking-[0.1em] text-white/40 font-light">Powered By deVee Boutique Label</span>
+        <Image src="/label_logo.jpg" alt="deVee Label" width={32} height={32} className="rounded-full opacity-60 hover:opacity-100 transition-opacity cursor-pointer shadow-xl" />
+      </footer>
     </main>
   );
 }

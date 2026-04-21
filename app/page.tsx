@@ -14,7 +14,7 @@ export default function Home() {
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // דאטה פיקטיבי לטיימליין (יישלף מה-API בהמשך)
+  // דאטה פיקטיבי לטיימליין
   const segments = [1, 2, 3, 4]; 
 
   useEffect(() => {
@@ -54,7 +54,6 @@ export default function Home() {
     }
   };
 
-  // --- מסך נעילה ---
   if (!authorized) {
     return (
       <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-between p-8">
@@ -87,73 +86,70 @@ export default function Home() {
     );
   }
 
-  // --- ממשק ה-Editor (הטיימליין החדש) ---
   return (
     <main className="min-h-screen bg-[#050505] text-white font-sans flex flex-col items-center py-12 px-6">
       
-      {/* Header */}
-      <header className="w-full max-w-2xl flex justify-between items-center mb-12">
-        <Image src="/logo.png" alt="deVee" width={80} height={26} className="opacity-70" />
-        <span className="text-[8px] tracking-[0.4em] uppercase text-white/20 italic font-medium">Neural Editor v2.0</span>
+      {/* Header - לוגו ממורכז ונקי */}
+      <header className="w-full max-w-2xl flex justify-center items-center mb-16">
+        <Image src="/logo.png" alt="deVee Dubber" width={90} height={30} className="opacity-80" />
       </header>
 
       {/* Main Stack */}
       <div className="w-full max-w-2xl space-y-8">
         
-        {/* 1. Video Monitor */}
+        {/* Video Monitor */}
         <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
           {videoPreview ? (
             <video src={videoPreview} controls className="w-full h-full object-contain" />
           ) : (
             <div onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center space-y-4 cursor-pointer group">
-              <div className="w-12 h-12 rounded-full border border-white/5 flex items-center justify-center text-white/10 group-hover:text-[#A855F7] transition-colors font-light text-xl">+</div>
-              <p className="text-[9px] uppercase tracking-[0.4em] text-white/20">Upload Raw Media</p>
+              <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center text-white/10 group-hover:text-[#A855F7] transition-colors text-lg">+</div>
+              <p className="text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold">Upload Media</p>
               <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
             </div>
           )}
         </div>
 
-        {/* 2. Neural Timeline */}
+        {/* Neural Timeline */}
         <div className="w-full space-y-3">
           <div className="flex justify-between items-center px-2">
-            <span className="text-[8px] uppercase tracking-widest text-white/20">Timeline</span>
-            <span className="text-[8px] uppercase tracking-widest text-[#A855F7] font-bold">Neural Segments</span>
+            <span className="text-[7px] uppercase tracking-[0.3em] text-white/20 font-bold">Monitor</span>
+            <span className="text-[7px] uppercase tracking-[0.3em] text-[#A855F7] font-black">Timeline</span>
           </div>
           <div className="h-16 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-2 flex gap-1 items-center overflow-x-auto no-scrollbar">
             {file ? segments.map((s) => (
-              <div key={s} className="h-full min-w-[80px] bg-[#A855F7]/10 border border-[#A855F7]/20 rounded-lg flex items-center justify-center relative group cursor-pointer hover:bg-[#A855F7]/20 transition-all">
+              <div key={s} className="h-full min-w-[70px] bg-[#A855F7]/10 border border-[#A855F7]/20 rounded-lg flex items-center justify-center relative group cursor-pointer hover:bg-[#A855F7]/20 transition-all">
                 <span className="text-[8px] text-[#A855F7] font-black opacity-40">#{s}</span>
-                <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-[8px] text-white/40 hover:text-red-500">✕</button>
               </div>
             )) : (
-              <div className="w-full text-center text-[8px] uppercase tracking-[0.4em] text-white/10">Waiting for data</div>
+              <div className="w-full text-center text-[7px] uppercase tracking-[0.4em] text-white/5">Waiting for source...</div>
             )}
           </div>
         </div>
 
-        {/* 3. Action Center */}
+        {/* Action Center */}
         <div className="flex flex-col items-center space-y-6 pt-4">
           <button 
             onClick={() => setIsDubbing(true)}
             disabled={!file || isDubbing}
-            className={`px-12 py-3.5 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${
-              file && !isDubbing ? 'bg-[#A855F7] text-white shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/[0.02] text-white/10 border border-white/5'
+            className={`px-14 py-3.5 rounded-full uppercase tracking-[0.4em] text-[8px] font-black transition-all ${
+              file && !isDubbing ? 'bg-[#A855F7] text-white shadow-[0_0_40px_rgba(168,85,247,0.25)] hover:scale-105' : 'bg-white/[0.02] text-white/10 border border-white/5'
             }`}
           >
-            {isDubbing ? 'Processing...' : 'DUB!'}
+            {isDubbing ? 'Syncing...' : 'DUB!'}
           </button>
           
-          <p className="text-[7px] tracking-[0.3em] text-white/10 uppercase italic text-center">
-            Neural sync will generate timeline segments automatically
+          <p className="text-[7px] tracking-[0.2em] text-white/10 uppercase italic text-center max-w-[200px]">
+            Neural engine will process speech and sync timeline automatically
           </p>
         </div>
 
       </div>
 
       {/* Footer Standard */}
-      <footer className="mt-auto pt-20 pb-8 flex flex-col items-center space-y-3">
+      <footer className="mt-auto pt-20 pb-4 flex flex-col items-center space-y-3">
         <span className="text-[9px] tracking-[0.1em] text-white/40 font-light">Powered By deVee Boutique Label</span>
-        <Image src="/label_logo.jpg" alt="deVee Label" width={32} height={32} className="rounded-full opacity-60 hover:opacity-100 transition-opacity cursor-pointer" />
+        <Image src="/label_logo.jpg" alt="deVee Label" width={32} height={32} className="rounded-full opacity-60 hover:opacity-100 transition-opacity cursor-pointer shadow-xl" />
       </footer>
 
     </main>

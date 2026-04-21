@@ -1,24 +1,23 @@
 "use client";
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
-  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await fetch('/api/auth', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
     });
 
     if (res.ok) {
-      router.push('/');
-      router.refresh();
+      // שימוש ב-location.href כדי להבטיח שהשרת יקרא את העוגייה בדף הבית
+      window.location.href = '/';
     } else {
       setError(true);
       setTimeout(() => setError(false), 2000);
@@ -32,17 +31,20 @@ export default function LoginPage() {
         {/* Branding */}
         <div className="flex flex-col items-center space-y-4 mb-4">
           <Image src="/logo.png" alt="deVee" width={120} height={40} className="opacity-90" />
-          <h2 className="text-[10px] tracking-[0.5em] uppercase text-[#A855F7] font-bold italic">Private Studio Access</h2>
+          <h2 className="text-[10px] tracking-[0.5em] uppercase text-[#A855F7] font-bold italic">
+            Private Studio Access
+          </h2>
         </div>
 
         {/* Login Card */}
         <div className="w-full bg-[#0c0c0c] border border-white/[0.05] rounded-[30px] p-8 shadow-2xl relative group">
-          {/* הילה סגולה במקום זהב */}
           <div className="absolute -inset-1 bg-[#A855F7] rounded-[32px] blur opacity-[0.05] group-hover:opacity-[0.12] transition-opacity"></div>
           
           <form onSubmit={handleLogin} className="relative flex flex-col space-y-6">
             <div className="space-y-2">
-              <label className="text-[9px] uppercase tracking-widest text-white/30 ml-2">Enter Access Key</label>
+              <label className="text-[9px] uppercase tracking-widest text-white/30 ml-2">
+                Enter Access Key
+              </label>
               <input 
                 type="password" 
                 value={password}
@@ -62,7 +64,9 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-[7px] tracking-[0.2em] text-white/20 uppercase">Authorized deVee Artists Only</p>
+        <p className="text-[7px] tracking-[0.2em] text-white/20 uppercase">
+          Authorized deVee Artists Only
+        </p>
       </div>
     </main>
   );

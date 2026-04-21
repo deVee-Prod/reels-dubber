@@ -1,35 +1,29 @@
-export const dynamic = 'force-dynamic';
-
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-
-// --- חלק 1: הבדיקה בשרת (Server Component) ---
-export default async function Home() {
-  const cookieStore = await cookies();
-  const session = cookieStore.get('session_access');
-
-  // אם אין עוגייה או שהסיסמה לא תואמת ל-ENV
-  if (!session || session.value !== process.env.ADMIN_PASSWORD) {
-    redirect('/signin');
-  }
-
-  // אם הכל תקין, אנחנו מציגים את ה-Client Component שמוגדר למטה
-  return <DubberInterface />;
-}
-
-// --- חלק 2: הממשק המלא של הסטודיו (Client Component) ---
-"use client";
+"use client"; // חייב להיות בשורה הראשונה!
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
-function DubberInterface() {
+export default function Home() {
+  const [authorized, setAuthorized] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [step, setStep] = useState(1);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
-  // כאן הכנסתי את כל הלוגיקה המקורית של הסטודיו שלך
+  // בדיקת אבטחה בתוך ה-Client
+  useEffect(() => {
+    // אנחנו בודקים אם העוגייה קיימת. אם לא - עפים ללוגין
+    const hasAccess = document.cookie.includes('session_access');
+    if (!hasAccess) {
+      router.push('/signin');
+    } else {
+      setAuthorized(true);
+    }
+  }, [router]);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
     if (uploadedFile) {
@@ -38,6 +32,9 @@ function DubberInterface() {
       setStep(2);
     }
   };
+
+  // אם עוד לא בדקנו אישור, לא מראים כלום (מונע "קפיצה" של התוכן)
+  if (!authorized) return <div className="min-h-screen bg-[#050505]" />;
 
   return (
     <main className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#A855F7]/30">
@@ -61,7 +58,10 @@ function DubberInterface() {
               {videoPreview ? (
                 <video src={videoPreview} controls className="w-full h-full object-cover" />
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center space-y-6">
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute inset-0 flex flex-col items-center justify-center space-y-6 cursor-pointer hover:bg-white/[0.01] transition-colors"
+                >
                   <div className="w-20 h-20 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center group-hover:scale-110 transition-transform duration-500">
                     <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 4v16m8-8H4" />
@@ -71,15 +71,16 @@ function DubberInterface() {
                     <p className="text-[11px] uppercase tracking-[0.3em] text-white/40 mb-1">Drop Raw Footage</p>
                     <p className="text-[9px] text-white/10 uppercase tracking-widest">Supported: MP4, MOV, WEBM</p>
                   </div>
-                  <input 
-                    type="file" 
-                    onChange={handleFileUpload}
-                    className="absolute inset-0 opacity-0 cursor-pointer" 
-                    accept="video/*"
-                  />
+                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
                 </div>
               )}
             </div>
+            {file && (
+              <div className="flex items-center gap-4 px-6 py-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                <div className="w-2 h-2 rounded-full bg-green-500/40 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></div>
+                <span className="text-[10px] uppercase tracking-widest text-white/40">File Loaded: {file.name}</span>
+              </div>
+            )}
           </div>
 
           {/* Right Column: Controls */}
@@ -88,7 +89,6 @@ function DubberInterface() {
               <div className="absolute top-0 right-0 p-8">
                 <span className="text-[40px] font-black text-white/[0.02] select-none">0{step}</span>
               </div>
-
               <div className="relative z-10">
                 <h1 className="text-4xl font-black uppercase tracking-tighter mb-2">
                   Dubber <span className="text-[#A855F7] italic">AI</span>
@@ -96,50 +96,29 @@ function DubberInterface() {
                 <p className="text-white/30 text-[11px] uppercase tracking-[0.2em] mb-12">
                   Multilingual Speech Synthesis
                 </p>
-
                 <div className="space-y-12">
-                  {/* Action Button */}
                   <button 
-                    onClick={() => setIsAnalyzing(true)}
                     disabled={!file || isAnalyzing}
                     className={`w-full py-6 rounded-2xl flex items-center justify-center gap-4 transition-all duration-500 group relative overflow-hidden ${
-                      file ? 'bg-[#A855F7] text-white' : 'bg-white/[0.02] text-white/20 border border-white/5'
+                      file && !isAnalyzing ? 'bg-[#A855F7] text-white' : 'bg-white/[0.02] text-white/20 border border-white/5'
                     }`}
                   >
                     <span className="relative z-10 uppercase tracking-[0.4em] text-[11px] font-black">
                       {isAnalyzing ? 'Processing Audio...' : 'Analyze Speech'}
                     </span>
-                    {!isAnalyzing && file && (
-                      <svg className="w-4 h-4 relative z-10 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                      </svg>
-                    )}
                   </button>
-
-                  {/* Status Grid */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                      <p className="text-[8px] uppercase tracking-widest text-white/20 mb-1">Status</p>
-                      <p className="text-[10px] uppercase font-bold text-[#A855F7] tracking-widest">
-                        {file ? 'Ready' : 'Idle'}
-                      </p>
+                      <p className="text-[8px] uppercase tracking-widest text-white/20 mb-1">Target Language</p>
+                      <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest">English (US)</p>
                     </div>
                     <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                      <p className="text-[8px] uppercase tracking-widest text-white/20 mb-1">Source</p>
-                      <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest truncate">
-                        {file ? file.name : 'No File'}
-                      </p>
+                      <p className="text-[8px] uppercase tracking-widest text-white/20 mb-1">Voice Profile</p>
+                      <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest">Neural Clone</p>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="px-6 text-center">
-              <p className="text-[8px] uppercase tracking-[0.3em] text-white/20 leading-relaxed">
-                By using deVee Dubber you agree to our <br />
-                <span className="text-white/40">Terms of Neural Processing</span>
-              </p>
             </div>
           </div>
         </div>

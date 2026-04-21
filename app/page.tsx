@@ -90,9 +90,12 @@ export default function Home() {
     setTranscription(updated);
   };
 
+  // פונקציה משופרת למציאת המילה הנוכחית - מפחיתה דיליי
   const getCurrentWord = () => {
+    // הוספת "באפר" קטן של 0.1 שניות כדי לפצות על השיהוי של הנגן
+    const adjustedTime = currentTime + 0.1;
     return transcription.find(
-      (w) => currentTime >= w.start && currentTime <= w.end
+      (w) => adjustedTime >= w.start && adjustedTime <= w.end
     );
   };
 
@@ -182,10 +185,11 @@ export default function Home() {
                 className="w-full h-full object-contain"
                 onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
               />
-              <div className="absolute bottom-[15%] left-0 right-0 flex justify-center pointer-events-none px-6 text-center">
+              {/* כתוביות Heebo משופרות: קטנות יותר, גבוהות יותר וללא דיליי */}
+              <div className="absolute bottom-[25%] left-0 right-0 flex justify-center pointer-events-none px-6 text-center">
                  {getCurrentWord() && (
                    <span 
-                    className="text-white text-4xl font-black drop-shadow-[0_4px_12px_rgba(0,0,0,1)] uppercase tracking-tight" 
+                    className="text-white text-3xl font-black drop-shadow-[0_4px_10px_rgba(0,0,0,1)] uppercase tracking-tight" 
                     style={{ fontFamily: 'Heebo, sans-serif' }}
                    >
                      {getCurrentWord().word}

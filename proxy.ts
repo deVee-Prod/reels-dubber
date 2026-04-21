@@ -5,21 +5,26 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const session = request.cookies.get('session_access')?.value
 
-  // אם אנחנו כבר בדף לוגין או ב-API, אל תעשה כלום
-  if (pathname.startsWith('/login') || pathname.startsWith('/api') || pathname.includes('.')) {
+  // שחרור מוחלט של קבצים סטטיים ודף הלוגין
+  if (
+    pathname.startsWith('/_next') || 
+    pathname.startsWith('/api') || 
+    pathname.startsWith('/login') ||
+    pathname.includes('.')
+  ) {
     return NextResponse.next()
   }
 
-  // אם אין סשן, תפנה ללוגין
+  // בדיקת סיסמה
   if (!session || session !== process.env.ADMIN_PASSWORD) {
-    console.log("Redirecting to login from:", pathname)
-    return NextResponse.redirect(new URL('/login', request.url))
+    // חשוב: משתמשים בכתובת מוחלטת כדי למנוע לופים
+    const loginUrl = new URL('/login', request.url)
+    return NextResponse.redirect(loginUrl)
   }
 
   return NextResponse.next()
 }
 
 export const config = {
-  //Matcher מעודכן ל-2026
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 }

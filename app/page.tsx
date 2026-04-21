@@ -13,7 +13,7 @@ export default function Home() {
   const [isDubbing, setIsDubbing] = useState(false);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
-  const [transcription, setTranscription] = useState<any[]>([]); // כאן יישמרו המילים מגוגל
+  const [transcription, setTranscription] = useState<any[]>([]); 
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ffmpegRef = useRef<any>(null);
@@ -46,13 +46,13 @@ export default function Home() {
     const { fetchFile } = await import('@ffmpeg/util');
 
     try {
-      // 1. חילוץ אודיו (כמו שעשינו)
+      // 1. חילוץ אודיו
       await ffmpeg.writeFile('input_video', await fetchFile(file));
       await ffmpeg.exec(['-i', 'input_video', '-vn', '-ab', '128k', 'output_audio.mp3']);
       const data = await ffmpeg.readFile('output_audio.mp3');
       const audioBlob = new Blob([data as any], { type: 'audio/mp3' });
 
-      // 2. שליחה ל-API החדש שלנו (הצינור המאובטח)
+      // 2. שליחה ל-API המאובטח
       const formData = new FormData();
       formData.append('audio', audioBlob);
 
@@ -62,20 +62,26 @@ export default function Home() {
       });
 
       const result = await response.json();
+      
+      // לוג קריטי לאבחון הבעיה
+      console.log('--- Google Sync Report ---');
+      console.log('Status:', response.status);
+      console.log('Payload:', result);
 
       if (result.transcription) {
-        // שומרים את המילים שחזרו מגוגל ב-State
         const allWords = result.transcription.flatMap((t: any) => t.words);
         setTranscription(allWords);
         setIsDubbing(false);
       } else {
-        throw new Error('Transcription failed');
+        // אם השרת החזיר שגיאה מגוגל, נשתמש בה
+        throw new Error(result.error || 'Transcription failed');
       }
 
-    } catch (error) {
-      console.error('Error during DUB process:', error);
+    } catch (error: any) {
+      console.error('DUB Error:', error);
       setIsDubbing(false);
-      alert('Something went wrong with the connection to Google.');
+      // מציג למשתמש את השגיאה הספציפית מגוגל
+      alert(`Debug: ${error.message}`);
     }
   };
 
@@ -108,7 +114,7 @@ export default function Home() {
     if (uploadedFile) {
       setFile(uploadedFile);
       setVideoPreview(URL.createObjectURL(uploadedFile));
-      setTranscription([]); // איפוס כתוביות בהעלאה חדשה
+      setTranscription([]); 
     }
   };
 
@@ -155,7 +161,6 @@ export default function Home() {
       </header>
 
       <div className="w-full max-w-2xl space-y-8">
-        {/* Monitor */}
         <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
           {videoPreview ? (
             <video src={videoPreview} controls className="w-full h-full object-contain" />
@@ -168,7 +173,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Timeline הופך לדינמי */}
         <div className="w-full space-y-3">
           <div className="flex justify-between items-center px-2">
             <span className="text-[7px] uppercase tracking-[0.3em] text-white/20 font-bold">Monitor</span>

@@ -9,12 +9,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
     }
 
-    // המרת ה-Blob ל-Buffer ומשם ל-Base64
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const audioContent = buffer.toString('base64');
-
-    const apiKey = process.env.GOOGLE_API_KEY; // וודא שזה השם ב-Vercel
+    const audioContent = Buffer.from(arrayBuffer).toString('base64');
+    const apiKey = process.env.GOOGLE_API_KEY;
 
     const response = await fetch(
       `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`,
@@ -24,9 +21,8 @@ export async function POST(req: Request) {
         body: JSON.stringify({
           config: {
             encoding: 'MP3',
-            sampleRateHertz: 16000,
-            languageCode: 'he-IL', // עברית כברירת מחדל, אפשר לשנות
-            enableWordTimeOffsets: true, // קריטי לכתוביות!
+            languageCode: 'he-IL',
+            enableWordTimeOffsets: true,
           },
           audio: {
             content: audioContent,
@@ -36,9 +32,17 @@ export async function POST(req: Request) {
     );
 
     const data = await response.json();
+
+    // אם גוגל החזירה שגיאה - אנחנו מעבירים אותה ל-Frontend
+    if (data.error) {
+      return NextResponse.json({ error: data.error.message, code: data.error.code }, { status: 500 });
+    }
+
+    if (!data.results) {
+      return NextResponse.json({ transcription: [] });
+    }
     
-    // ניקוי הדאטה כדי שיחזור רק מה שצריך לטיימליין
-    const transcription = data.results?.map((result: any) => ({
+    const transcription = data.results.map((result: any) => ({
       text: result.alternatives[0].transcript,
       words: result.alternatives[0].words.map((w: any) => ({
         word: w.word,
@@ -49,8 +53,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ transcription });
 
-  } catch (error) {
-    console.error('Transcription error:', error);
-    return NextResponse.json({ error: 'Failed to transcribe' }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

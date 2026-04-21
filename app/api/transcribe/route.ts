@@ -10,10 +10,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
     }
 
-    // שימוש במפתח ה-API של הבוט (AI Studio)
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-    // משתמשים ב-Gemini 1.5 Flash - המודל הכי מהיר ומדויק למשימה הזאת
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    // משתמשים ב-Gemini 1.5 Flash - מומלץ לוודא שהשם נכון (gemini-1.5-flash)
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const arrayBuffer = await file.arrayBuffer();
     const base64Audio = Buffer.from(arrayBuffer).toString('base64');
@@ -38,12 +37,20 @@ export async function POST(req: Request) {
     ]);
 
     const responseText = result.response.text();
-    // ניקוי המעטפת של ה-JSON אם המודל הוסיף אותה
     const cleanJson = responseText.replace(/```json|```/g, "").trim();
     const transcriptionData = JSON.parse(cleanJson);
 
-    // התאמה למבנה שה-Frontend שלך מצפה לו
-    return NextResponse.json({ transcription: transcriptionData });
+    // התיקון הקריטי: התאמה למבנה שה-Frontend מצפה לו (Array בתוך Array)
+    const formattedTranscription = [{
+      text: transcriptionData.map((w: any) => w.word).join(' '),
+      words: transcriptionData.map((w: any) => ({
+        word: w.word,
+        start: Number(w.start),
+        end: Number(w.end)
+      }))
+    }];
+
+    return NextResponse.json({ transcription: formattedTranscription });
 
   } catch (error: any) {
     console.error("Gemini Error:", error);

@@ -20,8 +20,8 @@ export default function LoginPage() {
       });
 
       if (res.ok) {
-        // רענון קשיח והחלפת כתובת כדי לעקוף את ה-Cache של ה-Proxy
-        window.location.replace('/');
+        // הוספת גרסה רנדומלית כדי לעקוף את ה-Cache של הדפדפן וה-Proxy
+        window.location.href = '/?v=' + Math.random();
       } else {
         setError(true);
         setPassword('');

@@ -1,28 +1,48 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 export default function Home() {
   const [authorized, setAuthorized] = useState(false);
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  
   const [file, setFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [step, setStep] = useState(1);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const router = useRouter();
 
-  // בדיקת אבטחה בתוך ה-Client
+  // בדיקת אבטחה מקומית בלבד - בלי לשלוח לכתובות אחרות
   useEffect(() => {
-    // אנחנו בודקים אם העוגייה קיימת. אם לא - עפים ללוגין
-    const hasAccess = document.cookie.includes('session_access');
-    if (!hasAccess) {
-      router.push('/signin');
-    } else {
+    if (document.cookie.includes('session_access')) {
       setAuthorized(true);
     }
-  }, [router]);
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        setAuthorized(true);
+      } else {
+        setLoginError(true);
+        setTimeout(() => setLoginError(false), 2000);
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
@@ -33,109 +53,110 @@ export default function Home() {
     }
   };
 
-  // אם עוד לא בדקנו אישור, לא מראים כלום (מונע "קפיצה" של התוכן)
-  if (!authorized) return <div className="min-h-screen bg-[#050505]" />;
+  // --- תצוגת מסך נעילה (UI אלגנטי) ---
+  if (!authorized) {
+    return (
+      <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-between p-8">
+        <div /> {/* Spacer */}
+        <div className="w-full max-w-[360px] flex flex-col items-center space-y-12">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="relative group">
+              <div className="absolute -inset-4 bg-[#A855F7] rounded-full blur opacity-10 group-hover:opacity-20 transition-opacity"></div>
+              <Image src="/logo.png" alt="deVee" width={100} height={32} className="relative" />
+            </div>
+            <h2 className="text-[9px] tracking-[0.6em] uppercase text-[#A855F7]/80 font-bold italic">
+              Private Studio Access
+            </h2>
+          </div>
 
-  return (
-    <main className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#A855F7]/30 flex flex-col justify-between">
-      <div className="max-w-7xl mx-auto px-6 py-12 w-full">
-        {/* Header */}
-        <header className="flex justify-between items-center mb-16">
-          <Image src="/logo.png" alt="deVee" width={100} height={32} className="opacity-80" />
-          <div className="flex items-center gap-6">
-            <div className="h-2 w-2 rounded-full bg-[#A855F7] animate-pulse shadow-[0_0_10px_#A855F7]"></div>
-            <span className="text-[10px] tracking-[0.4em] uppercase text-white/40 italic">
-              Production Suite v2.0
+          <div className="w-full bg-[#0c0c0c]/50 border border-white/[0.03] rounded-[24px] p-8 shadow-2xl backdrop-blur-xl">
+            <form onSubmit={handleLogin} className="flex flex-col space-y-5">
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`w-full bg-white/[0.02] border ${loginError ? 'border-red-500/40' : 'border-white/5'} rounded-xl py-3 px-4 text-white focus:outline-none focus:border-[#A855F7]/30 transition-all text-center tracking-[0.3em] text-[12px]`}
+                placeholder="ACCESS KEY"
+              />
+              <button 
+                type="submit"
+                disabled={loginLoading}
+                className="w-full py-3 bg-[#A855F7] hover:bg-[#9333ea] text-white rounded-xl uppercase tracking-[0.3em] text-[9px] font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50"
+              >
+                {loginLoading ? 'Verifying...' : 'Enter Studio'}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* Footer Standard */}
+        <footer className="flex flex-col items-center space-y-3">
+          <div className="flex items-center gap-3 opacity-30">
+            <Image src="/logo.png" alt="deVee Label" width={30} height={10} />
+            <span className="text-[7px] uppercase tracking-[0.3em] text-white">
+              Powered By deVee Boutique Label
             </span>
+          </div>
+        </footer>
+      </main>
+    );
+  }
+
+  // --- תצוגת הסטודיו (UI אלגנטי) ---
+  return (
+    <main className="min-h-screen bg-[#050505] text-white font-sans flex flex-col justify-between">
+      <div className="max-w-7xl mx-auto px-6 py-12 w-full">
+        <header className="flex justify-between items-center mb-20">
+          <Image src="/logo.png" alt="deVee" width={90} height={28} className="opacity-70" />
+          <div className="flex items-center gap-6">
+            <div className="h-1.5 w-1.5 rounded-full bg-[#A855F7] animate-pulse"></div>
+            <span className="text-[9px] tracking-[0.4em] uppercase text-white/30 italic">Suite v2.0</span>
           </div>
         </header>
 
-        {/* Main Interface Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-          {/* Left Column: Video Preview & Dropzone */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.05] rounded-[40px] overflow-hidden group shadow-2xl">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
+          <div className="lg:col-span-7">
+            <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden group shadow-2xl">
               {videoPreview ? (
                 <video src={videoPreview} controls className="w-full h-full object-cover" />
               ) : (
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute inset-0 flex flex-col items-center justify-center space-y-6 cursor-pointer hover:bg-white/[0.01] transition-colors"
-                >
-                  <div className="w-20 h-20 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center group-hover:scale-110 transition-transform duration-500">
-                    <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 4v16m8-8H4" />
-                    </svg>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[11px] uppercase tracking-[0.3em] text-white/40 mb-1">Drop Raw Footage</p>
-                    <p className="text-[9px] text-white/10 uppercase tracking-widest">Supported: MP4, MOV, WEBM</p>
-                  </div>
+                <div onClick={() => fileInputRef.current?.click()} className="absolute inset-0 flex flex-col items-center justify-center space-y-4 cursor-pointer hover:bg-white/[0.01] transition-colors">
+                  <div className="w-12 h-12 rounded-full border border-white/5 flex items-center justify-center text-white/20 font-light text-xl">+</div>
+                  <p className="text-[9px] uppercase tracking-[0.4em] text-white/20">Upload Media</p>
                   <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
                 </div>
               )}
             </div>
-            {file && (
-              <div className="flex items-center gap-4 px-6 py-4 bg-white/[0.02] border border-white/5 rounded-2xl">
-                <div className="w-2 h-2 rounded-full bg-green-500/40 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></div>
-                <span className="text-[10px] uppercase tracking-widest text-white/40">File Loaded: {file.name}</span>
-              </div>
-            )}
           </div>
 
-          {/* Right Column: Controls */}
-          <div className="lg:col-span-5 space-y-8">
-            <div className="bg-[#0c0c0c] border border-white/[0.05] rounded-[40px] p-10 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8">
-                <span className="text-[40px] font-black text-white/[0.02] select-none">0{step}</span>
-              </div>
-              <div className="relative z-10">
-                <h1 className="text-4xl font-black uppercase tracking-tighter mb-2">
-                  Dubber <span className="text-[#A855F7] italic">AI</span>
-                </h1>
-                <p className="text-white/30 text-[11px] uppercase tracking-[0.2em] mb-12">
-                  Multilingual Speech Synthesis
-                </p>
-                <div className="space-y-12">
-                  {/* Action Button: Elegant update */}
-                  <button 
-                    disabled={!file || isAnalyzing}
-                    className={`w-full py-4 rounded-xl flex items-center justify-center gap-3 transition-all duration-500 group relative overflow-hidden ${
-                      file && !isAnalyzing ? 'bg-[#A855F7] text-white' : 'bg-white/[0.02] text-white/20 border border-white/5'
-                    }`}
-                  >
-                    <span className="relative z-10 uppercase tracking-[0.3em] text-[8px] font-bold">
-                      {isAnalyzing ? 'Processing Audio...' : 'Start Neural Dub'}
-                    </span>
-                  </button>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                      <p className="text-[8px] uppercase tracking-widest text-white/20 mb-1">Target Language</p>
-                      <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest">English (US)</p>
-                    </div>
-                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                      <p className="text-[8px] uppercase tracking-widest text-white/20 mb-1">Voice Profile</p>
-                      <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest">Neural Clone</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div className="lg:col-span-5 flex flex-col justify-center">
+            <div className="bg-[#0c0c0c]/50 border border-white/[0.03] rounded-[32px] p-10 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-8 text-white/[0.02] text-5xl font-black select-none">0{step}</div>
+              <h1 className="text-3xl font-black uppercase tracking-tighter mb-1">Dubber <span className="text-[#A855F7] italic text-2xl">AI</span></h1>
+              <p className="text-white/20 text-[9px] uppercase tracking-[0.3em] mb-12">Neural Voice Engine</p>
+              
+              <button 
+                onClick={() => setIsAnalyzing(true)}
+                disabled={!file || isAnalyzing}
+                className={`w-full py-3.5 rounded-xl uppercase tracking-[0.3em] text-[9px] font-bold transition-all ${
+                  file && !isAnalyzing ? 'bg-[#A855F7] text-white shadow-xl hover:bg-[#9333ea]' : 'bg-white/[0.02] text-white/10 border border-white/5'
+                }`}
+              >
+                {isAnalyzing ? 'Processing...' : 'Start Neural Dub'}
+              </button>
             </div>
           </div>
         </div>
       </div>
       
-      {/* Powered By: Standard footer for Studio */}
-      <footer className="w-full max-w-7xl mx-auto px-6 py-6 border-t border-white/[0.05] flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Image src="/logo.png" alt="deVee Label" width={40} height={12} className="opacity-40" />
-          <span className="text-[7px] uppercase tracking-[0.2em] text-white/20">
+      <footer className="w-full max-w-7xl mx-auto px-6 py-8 border-t border-white/[0.03] flex items-center justify-between">
+        <div className="flex items-center gap-3 opacity-30">
+          <Image src="/logo.png" alt="deVee Label" width={32} height={10} />
+          <span className="text-[7px] uppercase tracking-[0.3em] text-white">
             Powered By deVee Boutique Label
           </span>
         </div>
-        <p className="text-[7px] tracking-[0.2em] text-white/10 uppercase">
-          Neural Interface Studio
-        </p>
+        <p className="text-[7px] tracking-[0.4em] text-white/10 uppercase italic">Neural Studio</p>
       </footer>
     </main>
   );

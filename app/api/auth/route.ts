@@ -3,17 +3,17 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
   try {
     const { password } = await request.json();
+    const correctPassword = process.env.ADMIN_PASSWORD;
 
-    // בדיקה מול משתנה הסביבה ADMIN_PASSWORD שהגדרת ב-Vercel
-    if (password === process.env.ADMIN_PASSWORD) {
+    if (password === correctPassword) {
       const response = NextResponse.json({ success: true });
       
-      // יצירת עוגייה מאובטחת ל-7 ימים
+      // הגדרות עוגייה קשיחות ל-Vercel 2026
       response.cookies.set('session_access', password, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7,
+        secure: true, 
+        sameSite: 'strict',
+        maxAge: 60 * 60 * 24 * 7, // שבוע
         path: '/',
       });
       

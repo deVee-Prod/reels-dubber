@@ -10,12 +10,12 @@ export async function POST(request: Request) {
       
       // הגדרות עוגייה קשיחות ל-Vercel 2026
       response.cookies.set('session_access', password, {
-        httpOnly: true,
-        secure: true, 
-        sameSite: 'strict',
-        maxAge: 60 * 60 * 24 * 7, // שבוע
-        path: '/',
-      });
+  httpOnly: true,
+  secure: true, 
+  sameSite: 'lax',
+  maxAge: 60 * 60 * 24 * 7,
+  path: '/',
+});
       
       return response;
     }

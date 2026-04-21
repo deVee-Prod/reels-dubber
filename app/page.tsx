@@ -57,7 +57,8 @@ export default function Home() {
   if (!authorized) {
     return (
       <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-between p-8">
-        <div />
+        <div /> {/* Spacer */}
+        
         <div className="w-full max-w-[340px] flex flex-col items-center space-y-10">
           <div className="flex flex-col items-center space-y-4">
             <Image src="/logo.png" alt="deVee" width={100} height={32} />
@@ -80,13 +81,19 @@ export default function Home() {
             </form>
           </div>
         </div>
-        <footer className="flex flex-col items-center space-y-3 opacity-40">
-          <div className="flex items-center gap-3">
-            <Image src="/label_logo.jpg" alt="deVee Label" width={45} height={45} className="rounded-full shadow-lg" />
-            <span className="text-[7px] uppercase tracking-[0.3em] text-white font-medium">
-              Powered By deVee Boutique Label
-            </span>
-          </div>
+
+        {/* פוטר סטנדרטי של הלייבל למסך הנעילה */}
+        <footer className="flex flex-col items-center space-y-3 pb-4">
+          <span className="text-[9px] tracking-[0.1em] text-white/40 font-light">
+            Powered By deVee Boutique Label
+          </span>
+          <Image 
+            src="/label_logo.jpg" 
+            alt="deVee Label" 
+            width={32} 
+            height={32} 
+            className="rounded-full opacity-60" 
+          />
         </footer>
       </main>
     );
@@ -103,6 +110,7 @@ export default function Home() {
             <span className="text-[8px] tracking-[0.4em] uppercase text-white/20 italic font-medium">Suite v2.0</span>
           </div>
         </header>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
           <div className="lg:col-span-7">
             <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden group">
@@ -129,14 +137,19 @@ export default function Home() {
           </div>
         </div>
       </div>
-      <footer className="w-full max-w-7xl mx-auto px-6 py-8 border-t border-white/[0.04] flex items-center justify-between">
-        <div className="flex items-center gap-3 opacity-40 group">
-          <Image src="/label_logo.jpg" alt="deVee Label" width={30} height={30} className="rounded-full grayscale group-hover:grayscale-0 transition-all" />
-          <span className="text-[7px] uppercase tracking-[0.3em] text-white font-medium">
-            Powered By deVee Boutique Label
-          </span>
-        </div>
-        <p className="text-[7px] tracking-[0.4em] text-white/10 uppercase italic font-black">Private Studio Suite</p>
+      
+      {/* פוטר סטנדרטי של הלייבל לסטודיו */}
+      <footer className="w-full py-8 flex flex-col items-center justify-center space-y-3 mt-auto">
+        <span className="text-[9px] tracking-[0.1em] text-white/40 font-light">
+          Powered By deVee Boutique Label
+        </span>
+        <Image 
+          src="/label_logo.jpg" 
+          alt="deVee Label" 
+          width={32} 
+          height={32} 
+          className="rounded-full opacity-60 hover:opacity-100 transition-opacity cursor-pointer" 
+        />
       </footer>
     </main>
   );

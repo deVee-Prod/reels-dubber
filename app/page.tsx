@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+// ייבוא של FFmpeg
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 export default function Home() {
   const [authorized, setAuthorized] = useState(false);
@@ -12,16 +15,62 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [isDubbing, setIsDubbing] = useState(false);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const ffmpegRef = useRef(new FFmpeg());
 
-  // דאטה פיקטיבי לטיימליין
-  const segments = [1, 2, 3, 4]; 
+  // טעינת מנוע ה-FFmpeg
+  const loadFFmpeg = async () => {
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    const ffmpeg = ffmpegRef.current;
+    
+    // טעינת קבצי הליבה של המנוע
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    setFfmpegLoaded(true);
+  };
 
   useEffect(() => {
     if (document.cookie.includes('session_access')) {
       setAuthorized(true);
+      loadFFmpeg(); // טוען את המנוע ברגע שיש גישה
     }
   }, []);
+
+  // לוגיקת החילוץ והדיבוב
+  const handleDub = async () => {
+    if (!file || !ffmpegLoaded) return;
+    
+    setIsDubbing(true);
+    const ffmpeg = ffmpegRef.current;
+
+    try {
+      // 1. כתיבת הקובץ לזיכרון של FFmpeg
+      await ffmpeg.writeFile('input_video', await fetchFile(file));
+
+      // 2. פקודת FFmpeg לחילוץ אודיו ל-MP3
+      // -i: קלט, -vn: בלי וידאו, -ab: איכות סאונד
+      await ffmpeg.exec(['-i', 'input_video', '-vn', '-ab', '128k', 'output_audio.mp3']);
+
+      // 3. קריאת קובץ האודיו שנוצר
+      const data = await ffmpeg.readFile('output_audio.mp3');
+      const audioBlob = new Blob([data], { type: 'audio/mp3' });
+      
+      console.log('Audio Extracted Successfully!', audioBlob);
+      
+      // כאן בהמשך נשלח את ה-audioBlob ל-API של הדיבוב
+      setTimeout(() => {
+        setIsDubbing(false);
+        alert('Audio extracted! Ready for Neural Sync.');
+      }, 2000);
+
+    } catch (error) {
+      console.error('Error during extraction:', error);
+      setIsDubbing(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +83,7 @@ export default function Home() {
       });
       if (res.ok) {
         setAuthorized(true);
+        loadFFmpeg();
       } else {
         setLoginError(true);
         setPassword('');
@@ -56,40 +106,39 @@ export default function Home() {
 
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-between p-8">
-        <div />
-        <div className="w-full max-w-[340px] flex flex-col items-center space-y-10">
-          <div className="flex flex-col items-center space-y-4">
-            <Image src="/logo.png" alt="deVee" width={100} height={32} />
-            <h2 className="text-[9px] tracking-[0.5em] uppercase text-[#A855F7]/80 font-bold italic">Private Studio Access</h2>
+        <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-between p-8">
+          <div />
+          <div className="w-full max-w-[340px] flex flex-col items-center space-y-10">
+            <div className="flex flex-col items-center space-y-4">
+              <Image src="/logo.png" alt="deVee" width={100} height={32} />
+              <h2 className="text-[9px] tracking-[0.5em] uppercase text-[#A855F7]/80 font-bold italic">Private Studio Access</h2>
+            </div>
+            <div className="w-full bg-[#0c0c0c]/40 border border-white/[0.04] rounded-[24px] p-8 backdrop-blur-xl">
+              <form onSubmit={handleLogin} className="flex flex-col space-y-4">
+                <input 
+                  type="password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`w-full bg-white/[0.02] border ${loginError ? 'border-red-500/30' : 'border-white/5'} rounded-xl py-3 px-4 text-white focus:outline-none focus:border-[#A855F7]/30 transition-all text-center tracking-[0.4em] text-[11px]`}
+                  placeholder="ACCESS KEY"
+                />
+                <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">
+                  {loginLoading ? 'Verifying...' : 'Enter Studio'}
+                </button>
+              </form>
+            </div>
           </div>
-          <div className="w-full bg-[#0c0c0c]/40 border border-white/[0.04] rounded-[24px] p-8 backdrop-blur-xl">
-            <form onSubmit={handleLogin} className="flex flex-col space-y-4">
-              <input 
-                type="password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={`w-full bg-white/[0.02] border ${loginError ? 'border-red-500/30' : 'border-white/5'} rounded-xl py-3 px-4 text-white focus:outline-none focus:border-[#A855F7]/30 transition-all text-center tracking-[0.4em] text-[11px]`}
-                placeholder="ACCESS KEY"
-              />
-              <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">
-                {loginLoading ? 'Verifying...' : 'Enter Studio'}
-              </button>
-            </form>
-          </div>
-        </div>
-        <footer className="flex flex-col items-center space-y-3 pb-4">
-          <span className="text-[9px] tracking-[0.1em] text-white/40 font-light">Powered By deVee Boutique Label</span>
-          <Image src="/label_logo.jpg" alt="deVee Label" width={32} height={32} className="rounded-full opacity-60" />
-        </footer>
-      </main>
-    );
+          <footer className="flex flex-col items-center space-y-3 pb-4">
+            <span className="text-[9px] tracking-[0.1em] text-white/40 font-light">Powered By deVee Boutique Label</span>
+            <Image src="/label_logo.jpg" alt="deVee Label" width={32} height={32} className="rounded-full opacity-60" />
+          </footer>
+        </main>
+      );
   }
 
   return (
     <main className="min-h-screen bg-[#050505] text-white font-sans flex flex-col items-center py-12 px-6">
       
-      {/* Header - לוגו עם כיתוב Reels Dubber */}
       <header className="w-full max-w-2xl flex flex-col items-center mb-16 space-y-2">
         <Image src="/logo.png" alt="deVee" width={90} height={30} className="opacity-80" />
         <span className="text-[10px] tracking-[0.3em] text-white/40 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
@@ -97,10 +146,7 @@ export default function Home() {
         </span>
       </header>
 
-      {/* Main Stack */}
       <div className="w-full max-w-2xl space-y-8">
-        
-        {/* Video Monitor */}
         <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
           {videoPreview ? (
             <video src={videoPreview} controls className="w-full h-full object-contain" />
@@ -113,14 +159,13 @@ export default function Home() {
           )}
         </div>
 
-        {/* Neural Timeline */}
         <div className="w-full space-y-3">
           <div className="flex justify-between items-center px-2">
             <span className="text-[7px] uppercase tracking-[0.3em] text-white/20 font-bold">Monitor</span>
             <span className="text-[7px] uppercase tracking-[0.3em] text-[#A855F7] font-black">Timeline</span>
           </div>
           <div className="h-16 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-2 flex gap-1 items-center overflow-x-auto no-scrollbar">
-            {file ? segments.map((s) => (
+            {file ? [1,2,3,4].map((s) => (
               <div key={s} className="h-full min-w-[70px] bg-[#A855F7]/10 border border-[#A855F7]/20 rounded-lg flex items-center justify-center relative group cursor-pointer hover:bg-[#A855F7]/20 transition-all">
                 <span className="text-[8px] text-[#A855F7] font-black opacity-40">#{s}</span>
               </div>
@@ -130,31 +175,27 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Action Center */}
         <div className="flex flex-col items-center space-y-6 pt-4">
           <button 
-            onClick={() => setIsDubbing(true)}
-            disabled={!file || isDubbing}
+            onClick={handleDub}
+            disabled={!file || isDubbing || !ffmpegLoaded}
             className={`px-14 py-3.5 rounded-full uppercase tracking-[0.4em] text-[8px] font-black transition-all ${
-              file && !isDubbing ? 'bg-[#A855F7] text-white shadow-[0_0_40px_rgba(168,85,247,0.25)] hover:scale-105' : 'bg-white/[0.02] text-white/10 border border-white/5'
+              file && !isDubbing && ffmpegLoaded ? 'bg-[#A855F7] text-white shadow-[0_0_40px_rgba(168,85,247,0.25)] hover:scale-105' : 'bg-white/[0.02] text-white/10 border border-white/5'
             }`}
           >
-            {isDubbing ? 'Syncing...' : 'DUB!'}
+            {!ffmpegLoaded ? 'Loading Engine...' : isDubbing ? 'Processing...' : 'DUB!'}
           </button>
           
           <p className="text-[7px] tracking-[0.2em] text-white/10 uppercase italic text-center max-w-[200px]">
-            Neural engine will process speech and sync timeline automatically
+             Neural engine will extract and sync audio automatically
           </p>
         </div>
-
       </div>
 
-      {/* Footer Standard */}
       <footer className="mt-auto pt-20 pb-4 flex flex-col items-center space-y-3">
         <span className="text-[9px] tracking-[0.1em] text-white/40 font-light">Powered By deVee Boutique Label</span>
         <Image src="/label_logo.jpg" alt="deVee Label" width={32} height={32} className="rounded-full opacity-60 hover:opacity-100 transition-opacity cursor-pointer shadow-xl" />
       </footer>
-
     </main>
   );
 }

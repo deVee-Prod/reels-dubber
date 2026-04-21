@@ -1,28 +1,50 @@
-"use client"; // חייב להיות בשורה הראשונה!
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 
 export default function Home() {
-  const [authorized, setAuthorized] = useState(false);
+  // --- 1. אבטחה וגישה ---
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  // --- 2. לוגיקה של ה-Dubber ---
   const [file, setFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [step, setStep] = useState(1);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const router = useRouter();
 
-  // בדיקת אבטחה בתוך ה-Client
+  // בדיקה אם כבר יש עוגייה (בשביל רענון דף)
   useEffect(() => {
-    // אנחנו בודקים אם העוגייה קיימת. אם לא - עפים ללוגין
-    const hasAccess = document.cookie.includes('session_access');
-    if (!hasAccess) {
-      router.push('/signin');
-    } else {
-      setAuthorized(true);
+    if (document.cookie.includes('session_access')) {
+      setIsAuthorized(true);
     }
-  }, [router]);
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        setIsAuthorized(true);
+      } else {
+        setLoginError(true);
+        setTimeout(() => setLoginError(false), 2000);
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
@@ -33,92 +55,73 @@ export default function Home() {
     }
   };
 
-  // אם עוד לא בדקנו אישור, לא מראים כלום (מונע "קפיצה" של התוכן)
-  if (!authorized) return <div className="min-h-screen bg-[#050505]" />;
-
-  return (
-    <main className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#A855F7]/30">
-      <div className="max-w-7xl mx-auto px-6 py-12">
-        {/* Header */}
-        <header className="flex justify-between items-center mb-16">
-          <Image src="/logo.png" alt="deVee" width={100} height={32} className="opacity-80" />
-          <div className="flex items-center gap-6">
-            <div className="h-2 w-2 rounded-full bg-[#A855F7] animate-pulse shadow-[0_0_10px_#A855F7]"></div>
-            <span className="text-[10px] tracking-[0.4em] uppercase text-white/40 italic">
-              Production Suite v2.0
-            </span>
+  // --- תצוגת לוגין ---
+  if (!isAuthorized) {
+    return (
+      <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-[400px] space-y-8">
+          <div className="flex flex-col items-center space-y-4">
+            <Image src="/logo.png" alt="deVee" width={120} height={40} />
+            <h2 className="text-[10px] tracking-[0.5em] uppercase text-[#A855F7] font-bold italic">Private Access</h2>
           </div>
+          <div className="bg-[#0c0c0c] border border-white/5 rounded-[30px] p-8 relative">
+            <form onSubmit={handleLogin} className="space-y-6">
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`w-full bg-white/[0.02] border ${loginError ? 'border-red-500/50' : 'border-white/10'} rounded-[15px] py-4 px-5 text-white text-center focus:outline-none focus:border-[#A855F7]/50`}
+                placeholder="ACCESS KEY"
+              />
+              <button type="submit" className="w-full py-4 bg-[#A855F7] text-white rounded-[15px] uppercase tracking-widest font-black">
+                {loginLoading ? 'Verifying...' : 'Enter Studio'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // --- תצוגת הסטודיו (הקוד המלא שלך) ---
+  return (
+    <main className="min-h-screen bg-[#050505] text-white font-sans">
+      <div className="max-w-7xl mx-auto px-6 py-12">
+        <header className="flex justify-between items-center mb-16">
+          <Image src="/logo.png" alt="deVee" width={100} height={32} />
+          <span className="text-[10px] tracking-[0.4em] uppercase text-white/40 italic">Production Suite v2.0</span>
         </header>
 
-        {/* Main Interface Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-          {/* Left Column: Video Preview & Dropzone */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.05] rounded-[40px] overflow-hidden group shadow-2xl">
+          {/* וידאו */}
+          <div className="lg:col-span-7">
+            <div className="aspect-video bg-[#0c0c0c] border border-white/5 rounded-[40px] overflow-hidden relative group">
               {videoPreview ? (
                 <video src={videoPreview} controls className="w-full h-full object-cover" />
               ) : (
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute inset-0 flex flex-col items-center justify-center space-y-6 cursor-pointer hover:bg-white/[0.01] transition-colors"
-                >
-                  <div className="w-20 h-20 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center group-hover:scale-110 transition-transform duration-500">
-                    <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 4v16m8-8H4" />
-                    </svg>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[11px] uppercase tracking-[0.3em] text-white/40 mb-1">Drop Raw Footage</p>
-                    <p className="text-[9px] text-white/10 uppercase tracking-widest">Supported: MP4, MOV, WEBM</p>
-                  </div>
+                <div onClick={() => fileInputRef.current?.click()} className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer">
+                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4 italic text-white/20">+</div>
+                  <p className="text-[10px] uppercase tracking-widest text-white/40">Upload Raw Media</p>
                   <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
                 </div>
               )}
             </div>
-            {file && (
-              <div className="flex items-center gap-4 px-6 py-4 bg-white/[0.02] border border-white/5 rounded-2xl">
-                <div className="w-2 h-2 rounded-full bg-green-500/40 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></div>
-                <span className="text-[10px] uppercase tracking-widest text-white/40">File Loaded: {file.name}</span>
-              </div>
-            )}
           </div>
 
-          {/* Right Column: Controls */}
-          <div className="lg:col-span-5 space-y-8">
-            <div className="bg-[#0c0c0c] border border-white/[0.05] rounded-[40px] p-10 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8">
-                <span className="text-[40px] font-black text-white/[0.02] select-none">0{step}</span>
-              </div>
-              <div className="relative z-10">
-                <h1 className="text-4xl font-black uppercase tracking-tighter mb-2">
-                  Dubber <span className="text-[#A855F7] italic">AI</span>
-                </h1>
-                <p className="text-white/30 text-[11px] uppercase tracking-[0.2em] mb-12">
-                  Multilingual Speech Synthesis
-                </p>
-                <div className="space-y-12">
-                  <button 
-                    disabled={!file || isAnalyzing}
-                    className={`w-full py-6 rounded-2xl flex items-center justify-center gap-4 transition-all duration-500 group relative overflow-hidden ${
-                      file && !isAnalyzing ? 'bg-[#A855F7] text-white' : 'bg-white/[0.02] text-white/20 border border-white/5'
-                    }`}
-                  >
-                    <span className="relative z-10 uppercase tracking-[0.4em] text-[11px] font-black">
-                      {isAnalyzing ? 'Processing Audio...' : 'Analyze Speech'}
-                    </span>
-                  </button>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                      <p className="text-[8px] uppercase tracking-widest text-white/20 mb-1">Target Language</p>
-                      <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest">English (US)</p>
-                    </div>
-                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                      <p className="text-[8px] uppercase tracking-widest text-white/20 mb-1">Voice Profile</p>
-                      <p className="text-[10px] uppercase font-bold text-white/60 tracking-widest">Neural Clone</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          {/* פקדים */}
+          <div className="lg:col-span-5 space-y-6">
+            <div className="bg-[#0c0c0c] border border-white/5 rounded-[40px] p-10 relative">
+              <div className="absolute top-0 right-0 p-8 text-white/[0.02] text-4xl font-black">0{step}</div>
+              <h1 className="text-3xl font-black uppercase mb-2">Dubber <span className="text-[#A855F7]">AI</span></h1>
+              <p className="text-white/20 text-[10px] uppercase tracking-widest mb-12">Neural Voice Synthesis</p>
+              
+              <button 
+                onClick={() => setIsAnalyzing(true)}
+                disabled={!file || isAnalyzing}
+                className={`w-full py-6 rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all ${file ? 'bg-[#A855F7] shadow-[0_0_20px_#A855F7/20]' : 'bg-white/5 text-white/20'}`}
+              >
+                {isAnalyzing ? 'Processing...' : 'Analyze Speech'}
+              </button>
             </div>
           </div>
         </div>

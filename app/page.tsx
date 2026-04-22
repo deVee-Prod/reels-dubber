@@ -151,10 +151,6 @@ export default function Home() {
     setCurrentTime(newTime);
     if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
     if (audioRef.current) audioRef.current.currentTime = newTime;
-    if (videoObjRef.current && canvasRef.current && (!isPlaying || audioRef.current?.paused)) {
-       const ctx = canvasRef.current.getContext('2d');
-       if (ctx) ctx.drawImage(videoObjRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-    }
   };
 
   const loadFFmpeg = async () => {
@@ -167,8 +163,9 @@ export default function Home() {
       ffmpeg.on('progress', ({ progress }) => {
         setExportProgress(Math.round(progress * 100));
       });
-      ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
-      const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
+      
+      // נשתמש בגרסה יציבה. במידה ואתה עובר ל-st (Single Thread) שנה ללינק המתאים.
+      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
       await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
@@ -178,7 +175,6 @@ export default function Home() {
       return ffmpeg;
     } catch (err) {
       console.error("FFmpeg Load Error:", err);
-      alert("שגיאה בטעינת מנוע העריכה. נסה לרענן את העמוד.");
       return null;
     }
   };
@@ -186,7 +182,7 @@ export default function Home() {
   useEffect(() => {
     if (document.cookie.includes('session_access')) {
       setAuthorized(true);
-      loadFFmpeg(); // מנסה לטעון ברקע
+      loadFFmpeg(); 
     }
   }, []);
 
@@ -195,13 +191,8 @@ export default function Home() {
     setIsDubbing(true);
     
     let ffmpeg = ffmpegRef.current;
-    if (!ffmpeg) {
-       ffmpeg = await loadFFmpeg();
-    }
-    if (!ffmpeg) {
-       setIsDubbing(false);
-       return;
-    }
+    if (!ffmpeg) ffmpeg = await loadFFmpeg();
+    if (!ffmpeg) { setIsDubbing(false); return; }
 
     const { fetchFile } = await import('@ffmpeg/util');
     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
@@ -234,13 +225,8 @@ export default function Home() {
     setExportProgress(0);
     
     let ffmpeg = ffmpegRef.current;
-    if (!ffmpeg) {
-       ffmpeg = await loadFFmpeg();
-    }
-    if (!ffmpeg) {
-       setIsExporting(false);
-       return;
-    }
+    if (!ffmpeg) ffmpeg = await loadFFmpeg();
+    if (!ffmpeg) { setIsExporting(false); return; }
 
     const { fetchFile } = await import('@ffmpeg/util');
 
@@ -249,7 +235,16 @@ export default function Home() {
       const inputPath = `input_${Date.now()}.${ext}`;
       const outputPath = `output_${Date.now()}.${ext}`;
 
+      // 1. כתיבת קובץ הוידאו
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
+
+      // 2. פתרון קלוד: כתיבת הפונט לתוך ה-Virtual Filesystem של FFmpeg
+      try {
+        const fontData = await fetchFile('/Roboto.ttf');
+        await ffmpeg.writeFile('Roboto.ttf', fontData);
+      } catch (e) {
+        console.error("Font file Roboto.ttf not found in public folder");
+      }
 
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
 
@@ -263,7 +258,8 @@ export default function Home() {
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
           
-          return `drawtext=text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+          // הוספת fontfile=Roboto.ttf לפילטר
+          return `drawtext=fontfile=Roboto.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }
@@ -281,12 +277,12 @@ export default function Home() {
       if (result !== 0) throw new Error("Encoding failed");
 
       const data = await ffmpeg.readFile(outputPath);
-      const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
+      const videoBlob = new Blob([data as any], { type: 'video/mp4' });
       const downloadUrl = URL.createObjectURL(videoBlob);
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_Export_${Date.now()}.${ext}`;
+      a.download = `deVee_Export_${Date.now()}.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -475,7 +471,6 @@ export default function Home() {
 
           <div className="flex flex-col gap-4">
             <div className="flex justify-center gap-4">
-              {/* שינוי קריטי: הכפתור לעולם לא ננעל בגלל ffmpegLoaded. אם לא נטען, ייטען בלחיצה */}
               <button onClick={handleDub} disabled={!file || isDubbing} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
                 {isDubbing ? 'Syncing / Loading...' : '1. DUB!'}
               </button>

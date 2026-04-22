@@ -242,7 +242,7 @@ export default function Home() {
         await ffmpeg.writeFile('myfont.ttf', new Uint8Array(fontBuffer));
       } catch (e) {
         console.error("Font loading error:", e);
-        alert("הפונט לא נמצא בשרת.");
+        alert("הפונט לא נמצא בשרת");
         setIsExporting(false);
         return;
       }
@@ -259,11 +259,19 @@ export default function Home() {
           let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
           
           const startT = Math.max(0, Number((item.start + currentOffset).toFixed(3)));
-          const endT = Math.max(0, Number((item.end + currentOffset).toFixed(3)));
+          let endT = Math.max(0, Number((item.end + currentOffset).toFixed(3)));
+          
+          // מנגנון מניעת החפיפה החכם: חותך את המילה לפני שהבאה מתחילה
+          const nextItem = transcription[index + 1];
+          if (nextItem) {
+              const nextStartT = Math.max(0, Number((nextItem.start + currentOffset).toFixed(3)));
+              if (endT > nextStartT) {
+                  // משאיר לפחות 50 מילישניות כדי שהמילה לא תעלם מיד
+                  endT = Math.max(startT + 0.05, nextStartT - 0.01); 
+              }
+          }
           
           const yPos = `h-(h*${subtitlePos}/100)-text_h`;
-          
-          // הגדרת מסגרת (Stroke) סופר עדינה ובלתי מורגשת
           const borderW = Math.max(0.5, 0.8 * scaleRatio); 
 
           return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black@0.3:borderw=${borderW}`;

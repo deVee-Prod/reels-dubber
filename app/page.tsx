@@ -228,7 +228,7 @@ export default function Home() {
       if (withSubtitles && transcription.length > 0) {
         let fontReady = false;
         
-        // שלב 1: ניסיון אחרון מה-public
+        // 1. ניסיון משיכה מה-public המקומי עם שובר קאש
         try {
           const fontRes = await fetch(`/heebo.ttf?v=${Date.now()}`);
           if (fontRes.ok) {
@@ -238,15 +238,14 @@ export default function Home() {
           }
         } catch (e) { console.warn("Local font fetch failed"); }
 
-        // שלב 2: אם ה-public נכשל (כמו שקורה לך עכשיו), נשתמש בלינק מיוחד של Vercel או לינק חלופי
+        // 2. גיבוי: משיכה מ-Google Fonts (יציב מאוד) דרך jsDelivr שמעולם לא חוסם CORS
         if (!fontReady) {
-            try {
-                // לינק נוסף יציב מאוד דרך jsDelivr שלא חוסם CORS
-                const fallbackUrl = "https://cdn.jsdelivr.net/gh/googlefonts/heebo@main/fonts/ttf/Heebo-Black.ttf";
-                const fontBuffer = await fetch(fallbackUrl).then(res => res.arrayBuffer());
-                await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontBuffer));
-                fontReady = true;
-            } catch (e2) { console.error("All font fallbacks failed"); }
+          try {
+            const fontUrl = "https://fonts.gstatic.com/s/heebo/v26/NGSpv5_7ad-LveS51KzS6A.ttf";
+            const fontBuffer = await fetch(fontUrl).then(res => res.arrayBuffer());
+            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontBuffer));
+            fontReady = true;
+          } catch (e2) { console.error("All font fallbacks failed"); }
         }
 
         const subtitleFilters = transcription.map((item, index) => {
@@ -258,7 +257,6 @@ export default function Home() {
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
           
-          // אם אין פונט, אנחנו פשוט לא נזריק את ה-fontfile כדי שהמנוע לא יקרוס
           const fontArg = fontReady ? "fontfile=heebo.ttf:" : "";
           return `drawtext=${fontArg}text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });

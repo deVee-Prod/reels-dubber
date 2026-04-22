@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 
-// פונקציית עזר לעיצוב הזמן (00:00)
 const formatTime = (time: number) => {
   if (isNaN(time)) return "00:00";
   const m = Math.floor(time / 60).toString().padStart(2, '0');
@@ -11,7 +10,6 @@ const formatTime = (time: number) => {
   return `${m}:${s}`;
 };
 
-// פונקציה חיונית ל-FFmpeg: הופכת עברית כדי שתוצג נכון בסרטון הצרוב
 const fixRTL = (text: string) => {
   const hebrewRegex = /[\u0590-\u05FF]/;
   if (hebrewRegex.test(text)) {
@@ -33,7 +31,7 @@ export default function Home() {
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
   const [currentTime, setCurrentTime] = useState(0); 
-  const [duration, setDuration] = useState(0); // State חדש לאורך הסרטון
+  const [duration, setDuration] = useState(0); 
   const [subtitlePos, setSubtitlePos] = useState(25);
   const [fontScale, setFontScale] = useState(1);
   const [globalOffset, setGlobalOffset] = useState(0); 
@@ -68,10 +66,13 @@ export default function Home() {
          }
       }
 
+      // התיקון לסרגל הזמן - בודק ישירות מול האודיו ולא מול ה-State
+      if (!audio.paused && !audio.ended) {
+        setCurrentTime(audio.currentTime);
+      }
+
       if (subtitleRef.current && transcription.length > 0) {
         const time = audio.currentTime + globalOffset;
-        if (isPlaying) setCurrentTime(audio.currentTime); // מעדכן את ציר הזמן רק כשמנגן
-        
         const wordObj = transcription.find(w => time >= w.start && time <= w.end);
         
         if (wordObj) {
@@ -96,7 +97,7 @@ export default function Home() {
   useEffect(() => {
     requestRef.current = requestAnimationFrame(syncAndDraw);
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
-  }, [transcription, fontScale, globalOffset, isPlaying]);
+  }, [transcription, fontScale, globalOffset]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
@@ -104,7 +105,7 @@ export default function Home() {
       if (videoPreview) URL.revokeObjectURL(videoPreview);
       setFile(uploadedFile);
       const buffer = await uploadedFile.arrayBuffer();
-      const blob = new Blob([buffer], { type: 'video/mp4' }); 
+      const blob = new Blob([buffer], { type: uploadedFile.type || 'video/mp4' }); 
       const url = URL.createObjectURL(blob);
       setVideoPreview(url);
       setTranscription([]); 
@@ -153,15 +154,13 @@ export default function Home() {
     }
   };
 
-  // פונקציה חדשה לגרירת ציר הזמן
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
     setCurrentTime(newTime);
     if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
     if (audioRef.current) audioRef.current.currentTime = newTime;
     
-    // ציור פריים בודד בזמן הגרירה גם אם ב-Pause
-    if (videoObjRef.current && canvasRef.current && !isPlaying) {
+    if (videoObjRef.current && canvasRef.current && (!isPlaying || audioRef.current?.paused)) {
        const ctx = canvasRef.current.getContext('2d');
        if (ctx) ctx.drawImage(videoObjRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
     }
@@ -174,7 +173,7 @@ export default function Home() {
     ffmpegRef.current = ffmpeg;
     
     ffmpeg.on('log', ({ message }) => {
-      console.log('FFmpeg:', message); // יעזור לנו לדבג אם יהיו תקלות בעתיד
+      console.log('FFmpeg:', message);
     });
 
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
@@ -197,9 +196,13 @@ export default function Home() {
     setIsDubbing(true);
     const ffmpeg = ffmpegRef.current;
     const { fetchFile } = await import('@ffmpeg/util');
+    
+    const ext = file.name.toLowerCase().endsWith('.mov') ? 'mov' : 'mp4';
+    const inputName = `input.${ext}`;
+
     try {
-      await ffmpeg.writeFile('input.mp4', await fetchFile(file));
-      await ffmpeg.exec(['-i', 'input.mp4', '-vn', '-ab', '128k', 'output_audio.mp3']);
+      await ffmpeg.writeFile(inputName, await fetchFile(file));
+      await ffmpeg.exec(['-i', inputName, '-vn', '-ab', '128k', 'output_audio.mp3']);
       const data = await ffmpeg.readFile('output_audio.mp3');
       const audioBlob = new Blob([data as any], { type: 'audio/mp3' });
       const formData = new FormData();
@@ -226,51 +229,58 @@ export default function Home() {
     const { fetchFile } = await import('@ffmpeg/util');
 
     try {
-      // כתיבה מסודרת של הקובץ לזיכרון של FFmpeg
-      await ffmpeg.writeFile('input.mp4', await fetchFile(file));
+      // זיהוי הפורמט של הקובץ שהועלה (MOV או MP4)
+      const ext = file.name.toLowerCase().endsWith('.mov') ? 'mov' : 'mp4';
+      const mimeType = ext === 'mov' ? 'video/quicktime' : 'video/mp4';
+      const inputName = `input.${ext}`;
+      const outputName = `output_final.${ext}`;
+
+      await ffmpeg.writeFile(inputName, await fetchFile(file));
 
       const fontRes = await fetch('https://raw.githubusercontent.com/googlefonts/heebo/main/fonts/ttf/Heebo-Black.ttf');
       const fontData = await fontRes.arrayBuffer();
-      await ffmpeg.writeFile('font.ttf', new Uint8Array(fontData));
+      await ffmpeg.writeFile('/font.ttf', new Uint8Array(fontData));
 
       const filters = transcription.map((item, index) => {
         const baseSize = [28, 42, 58][index % 3] * fontScale;
         const fontSize = Math.round(baseSize * 1.5); 
         
-        // הגנה מפני תווים ששוברים את FFmpeg ותיקון עברית
-        let safeWord = item.word.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'").replace(/,/g, "\\,");
+        // ניקוי עמוק של תווים ששוברים את FFmpeg
+        let safeWord = item.word.replace(/['"]/g, '\u2019').replace(/:/g, '\\:').replace(/,/g, '\\,');
         safeWord = fixRTL(safeWord);
 
         const startT = Math.max(0, item.start + globalOffset);
         const endT = Math.max(0, item.end + globalOffset);
         const yPos = `h-(h*${subtitlePos}/100)`;
 
-        return `drawtext=fontfile=font.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black:shadowx=2:shadowy=2`;
+        return `drawtext=fontfile=/font.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black:shadowx=2:shadowy=2`;
       });
 
-      const filterGraph = filters.join(',');
+      // הוספת scale קריטי למניעת קריסה ברזולוציות אי-זוגיות מהטלפון
+      const scaleFilter = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p";
+      const filterGraph = `${scaleFilter},${filters.join(',')}`;
 
-      // שינוי קריטי מ-copy ל-aac כדי להבטיח שהסאונד יכתב כראוי ולא ייצור קובץ פגום
       const ret = await ffmpeg.exec([
-        '-i', 'input.mp4',
+        '-i', inputName,
         '-vf', filterGraph,
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-c:a', 'aac', 
-        'output_final.mp4'
+        '-b:a', '128k',
+        outputName
       ]);
 
       if (ret !== 0) throw new Error("FFmpeg encoding failed");
 
-      const data = await ffmpeg.readFile('output_final.mp4');
+      const data = await ffmpeg.readFile(outputName);
       if (data.byteLength === 0) throw new Error("Exported file is 0 bytes");
 
-      const videoBlob = new Blob([data.buffer as ArrayBuffer], { type: 'video/mp4' });
+      const videoBlob = new Blob([data.buffer as ArrayBuffer], { type: mimeType });
       const downloadUrl = URL.createObjectURL(videoBlob);
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = 'deVee_Reels_Dubber.mp4';
+      a.download = `deVee_Reels_Dubber.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -279,7 +289,7 @@ export default function Home() {
 
     } catch (err) {
       console.error("Export failed:", err);
-      alert("שגיאה בייצוא הווידאו. בדוק את חיבור האינטרנט ונסה שוב.");
+      alert("שגיאה בייצוא הווידאו נסה להעלות את הקובץ מחדש");
     } finally {
       setIsExporting(false);
     }
@@ -370,7 +380,6 @@ export default function Home() {
                 />
                 <canvas ref={canvasRef} className="w-full h-full object-contain" />
                 
-                {/* Overlay Play Button */}
                 {!isPlaying && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity">
                     <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20">
@@ -397,7 +406,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* ה-Timeline החדש! */}
           {videoPreview && (
              <div className="flex items-center gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4">
                <span className="text-[10px] font-mono text-white/50 w-8 text-right">{formatTime(currentTime)}</span>

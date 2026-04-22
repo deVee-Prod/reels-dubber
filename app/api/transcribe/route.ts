@@ -17,56 +17,42 @@ export async function POST(req: Request) {
     const base64Audio = Buffer.from(arrayBuffer).toString('base64');
 
     const prompt = `
-      תמלל את האודיו המצורף מילה במילה
-      החזר JSON בלבד במבנה הבא:
-      [
-        {"word": "מילה", "start": 0.1, "end": 0.5},
-        ...
-      ]
-      חשוב: דייק מאוד בזמני ההתחלה (start) וזמני הסיום (end) ברמת המילישנייה
-      אל תוסיף הסברים או טקסט נוסף
+      תמלל את האודיו מילה במילה.
+      החזר JSON בלבד: [{"word": "מילה", "start": 1.23, "end": 1.45}]
+      דגש קריטי: סמן את ה-start בדיוק ברגע פתיחת הפה (העיצור הראשון).
     `;
 
     const result = await model.generateContent([
       prompt,
-      {
-        inlineData: {
-          mimeType: "audio/mp3",
-          data: base64Audio
-        }
-      }
+      { inlineData: { mimeType: "audio/mp3", data: base64Audio } }
     ]);
 
     const responseText = result.response.text();
-    
     const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-        throw new Error("Could not find JSON in response");
-    }
+    if (!jsonMatch) throw new Error("No JSON found");
     
     const transcriptionData = JSON.parse(jsonMatch[0]);
 
-    const lookahead = 0.15; 
+    // הגדרות "פינצטה" חדשות:
+    const lookahead = 0.08; // הקדמה עדינה יותר כדי לא להקדים מדי
+    const tailCut = 0.65;   // קיצוץ זנב אגרסיבי יותר (נשאר רק 65% מהמילה)
 
     const formattedTranscription = [{
       text: transcriptionData.map((w: any) => w.word).join(' '),
       words: transcriptionData.map((w: any, index: number) => {
-        const originalStart = Number(w.start);
-        const originalEnd = Number(w.end);
-        const duration = originalEnd - originalStart;
+        const oStart = Number(w.start);
+        const oEnd = Number(w.end);
+        const duration = oEnd - oStart;
 
-        let start = Math.max(0, originalStart - lookahead);
-        
-        // האינטואיציה שלך בפעולה: מקצצים את אורך הבלוק ב-30%
-        let end = start + (duration * 0.70);
+        let start = Math.max(0, oStart - lookahead);
+        // המילה תהיה קצרה ופאנצ'ית
+        let end = start + (duration * tailCut);
 
-        // מנגנון הגנה חריף: מוודא חיתוך לפני שהמילה הבאה נכנסת
+        // מניעת חפיפה עם המילה הבאה
         if (index < transcriptionData.length - 1) {
-            const nextStartOriginal = Number(transcriptionData[index + 1].start);
-            const nextStartCalculated = Math.max(0, nextStartOriginal - lookahead);
-            
-            if (end > nextStartCalculated) {
-                end = nextStartCalculated - 0.05;
+            const nextS = Math.max(0, Number(transcriptionData[index + 1].start) - lookahead);
+            if (end > nextS) {
+                end = nextS - 0.02; // מרווח ביטחון של 20 מילישניות
             }
         }
 

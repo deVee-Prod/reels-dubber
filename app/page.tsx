@@ -11,7 +11,7 @@ export default function Home() {
   
   const [file, setFile] = useState<File | null>(null);
   const [isDubbing, setIsDubbing] = useState(false);
-  const [isExporting, setIsExporting] = useState(false); // State לייצוא
+  const [isExporting, setIsExporting] = useState(false);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
@@ -19,18 +19,17 @@ export default function Home() {
   const [subtitlePos, setSubtitlePos] = useState(25);
   const [fontScale, setFontScale] = useState(1);
   const [globalOffset, setGlobalOffset] = useState(0); 
+  const [isPlaying, setIsPlaying] = useState(false); // State חדש למעקב אחרי ניגון
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null); 
+  const audioRef = useRef<HTMLAudioElement>(null);
   const subtitleRef = useRef<HTMLSpanElement>(null); 
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
-  
   const videoObjRef = useRef<HTMLVideoElement | null>(null);
 
-  // לולאת הציור והסנכרון המרכזית
   const syncAndDraw = () => {
     const video = videoObjRef.current;
     const audio = audioRef.current;
@@ -46,7 +45,6 @@ export default function Home() {
            }
            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
          }
-         
          if (Math.abs(video.currentTime - audio.currentTime) > 0.2) {
             video.currentTime = audio.currentTime;
          }
@@ -90,11 +88,11 @@ export default function Home() {
       const url = URL.createObjectURL(blob);
       setVideoPreview(url);
       setTranscription([]); 
+      setIsPlaying(false);
 
       const video = document.createElement('video');
       video.src = url;
       video.muted = true;
-      video.defaultMuted = true;
       video.playsInline = true;
       video.setAttribute('playsinline', 'true');
       video.setAttribute('webkit-playsinline', 'true');
@@ -119,18 +117,17 @@ export default function Home() {
     if (!video || !audio) return;
 
     if (audio.paused) {
-      video.muted = true;
-      video.setAttribute('playsinline', 'true');
-      video.setAttribute('webkit-playsinline', 'true');
       try {
         await video.play();
         await audio.play();
+        setIsPlaying(true);
       } catch (err) {
         console.error("Playback failed", err);
       }
     } else {
       video.pause();
       audio.pause();
+      setIsPlaying(false);
     }
   };
 
@@ -181,19 +178,20 @@ export default function Home() {
     }
   };
 
-  // פונקציית ייצוא והורדה
   const exportVideo = async () => {
     if (!file || !ffmpegLoaded || !ffmpegRef.current || transcription.length === 0) return;
     setIsExporting(true);
     const ffmpeg = ffmpegRef.current;
+    const { fetchFile } = await import('@ffmpeg/util');
 
     try {
-      // טעינת פונט Heebo לייצוא
+      // כתיבת הקובץ המקורי לזיכרון של FFmpeg (קריטי!)
+      await ffmpeg.writeFile('input_video', await fetchFile(file));
+
       const fontRes = await fetch('https://raw.githubusercontent.com/googlefonts/heebo/main/fonts/ttf/Heebo-Black.ttf');
       const fontData = await fontRes.arrayBuffer();
       await ffmpeg.writeFile('font.ttf', new Uint8Array(fontData));
 
-      // בניית הפילטרים לצריבת הכתוביות
       const filters = transcription.map((item, index) => {
         const baseSize = [28, 42, 58][index % 3] * fontScale;
         const fontSize = Math.round(baseSize * 1.5); 
@@ -211,7 +209,7 @@ export default function Home() {
         '-i', 'input_video',
         '-vf', filterGraph,
         '-c:v', 'libx264',
-        '-preset', 'fast',
+        '-preset', 'ultrafast',
         '-c:a', 'copy',
         'output_final.mp4'
       ]);
@@ -233,27 +231,6 @@ export default function Home() {
     } finally {
       setIsExporting(false);
     }
-  };
-
-  const startDragging = (e: any) => {
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const startY = clientY;
-    const startPos = subtitlePos;
-    const onMove = (moveEvent: any) => {
-      const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
-      const delta = ((startY - currentY) / (canvasRef.current?.clientHeight || 500)) * 100;
-      setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
-    };
-    const onEnd = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onEnd);
-      document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('touchend', onEnd);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onEnd);
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('touchend', onEnd);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -307,20 +284,24 @@ export default function Home() {
         </header>
 
         <div className="w-full space-y-8 pb-10">
-          <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
+          <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center group">
             {videoPreview ? (
-              <div className="relative w-full h-full">
+              <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
                 <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline />
-                <canvas 
-                  ref={canvasRef} 
-                  className="w-full h-full object-contain cursor-pointer" 
-                  onClick={togglePlay} 
-                />
+                <canvas ref={canvasRef} className="w-full h-full object-contain" />
+                
+                {/* Play/Pause Overlay */}
+                {!isPlaying && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity">
+                    <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20">
+                      <div className="w-0 h-0 border-t-[10px] border-t-transparent border-l-[18px] border-l-white border-b-[10px] border-b-transparent ml-1" />
+                    </div>
+                  </div>
+                )}
+
                 <div 
-                  className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-30"
+                  className="absolute left-0 right-0 flex justify-center px-6 text-center select-none z-30"
                   style={{ bottom: `${subtitlePos}%` }}
-                  onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }}
-                  onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
                 >
                   <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
                 </div>
@@ -342,9 +323,9 @@ export default function Home() {
             <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Sync</span>
               <div className="flex items-center space-x-3">
-                <button onClick={() => setGlobalOffset(prev => prev - 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">-</button>
+                <button onClick={() => setGlobalOffset(prev => prev - 0.05)} className="w-6 h-6 rounded-full bg-white/5">-</button>
                 <span className="text-[8px] font-mono text-[#A855F7]">{globalOffset.toFixed(2)}s</span>
-                <button onClick={() => setGlobalOffset(prev => prev + 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">+</button>
+                <button onClick={() => setGlobalOffset(prev => prev + 0.05)} className="w-6 h-6 rounded-full bg-white/5">+</button>
               </div>
             </div>
           </div>
@@ -357,7 +338,6 @@ export default function Home() {
                    updated[i].word = e.target.value;
                    setTranscription(updated);
                 }} className="bg-transparent border-none outline-none text-[11px] text-white font-bold text-center w-full focus:text-[#A855F7]" />
-                {/* כפתור מחיקת מילה */}
                 <button 
                   onClick={() => {
                     const updated = transcription.filter((_, idx) => idx !== i);

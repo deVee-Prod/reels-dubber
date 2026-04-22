@@ -12,9 +12,7 @@ const formatTime = (time: number) => {
 
 const fixRTL = (text: string) => {
   const hebrewRegex = /[\u0590-\u05FF]/;
-  if (hebrewRegex.test(text)) {
-     return text.split('').reverse().join('');
-  }
+  if (hebrewRegex.test(text)) return text.split('').reverse().join('');
   return text;
 };
 
@@ -27,6 +25,7 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [isDubbing, setIsDubbing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0); // סטייט לאחוזים
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
@@ -153,7 +152,6 @@ export default function Home() {
     setCurrentTime(newTime);
     if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
     if (audioRef.current) audioRef.current.currentTime = newTime;
-    
     if (videoObjRef.current && canvasRef.current && (!isPlaying || audioRef.current?.paused)) {
        const ctx = canvasRef.current.getContext('2d');
        if (ctx) ctx.drawImage(videoObjRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -165,6 +163,12 @@ export default function Home() {
     const { toBlobURL } = await import('@ffmpeg/util');
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
+
+    // האזנה להתקדמות הייצוא
+    ffmpeg.on('progress', ({ progress }) => {
+      setExportProgress(Math.round(progress * 100));
+    });
+
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
@@ -208,9 +212,10 @@ export default function Home() {
     }
   };
 
-  const exportVideo = async () => {
-    if (!file || !ffmpegLoaded || !ffmpegRef.current || transcription.length === 0) return;
+  const exportVideo = async (withSubtitles: boolean) => {
+    if (!file || !ffmpegLoaded || !ffmpegRef.current) return;
     setIsExporting(true);
+    setExportProgress(0);
     const ffmpeg = ffmpegRef.current;
     const { fetchFile } = await import('@ffmpeg/util');
 
@@ -221,25 +226,31 @@ export default function Home() {
 
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
-      const fontRes = await fetch('/heebo.ttf');
-      if (!fontRes.ok) throw new Error("Font file not found in public folder");
-      const fontData = await fontRes.arrayBuffer();
-      await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
+      let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
 
-      const subtitleFilters = transcription.map((item, index) => {
-        const baseSize = [28, 42, 58][index % 3] * fontScale;
-        const fontSize = Math.round(baseSize * 1.5); 
-        let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
-        safeWord = fixRTL(safeWord);
-        const startT = Math.max(0, item.start + globalOffset);
-        const endT = Math.max(0, item.end + globalOffset);
-        const yPos = `h-(h*${subtitlePos}/100)`;
-        return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
-      });
+      if (withSubtitles && transcription.length > 0) {
+        try {
+          const fontRes = await fetch('/heebo.ttf');
+          if (fontRes.ok) {
+            const fontData = await fontRes.arrayBuffer();
+            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
+            
+            const subtitleFilters = transcription.map((item, index) => {
+              const baseSize = [28, 42, 58][index % 3] * fontScale;
+              const fontSize = Math.round(baseSize * 1.5); 
+              let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
+              safeWord = fixRTL(safeWord);
+              const startT = Math.max(0, item.start + globalOffset);
+              const endT = Math.max(0, item.end + globalOffset);
+              const yPos = `h-(h*${subtitlePos}/100)`;
+              return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+            });
+            filterChain += `,${subtitleFilters.join(',')}`;
+          }
+        } catch (e) { console.warn("Exporting without custom font fallback"); }
+      }
 
-      const filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p,${subtitleFilters.join(',')}`;
-
-      const ret = await ffmpeg.exec([
+      await ffmpeg.exec([
         '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
@@ -249,24 +260,23 @@ export default function Home() {
         outputPath
       ]);
 
-      if (ret !== 0) throw new Error("FFmpeg encoding failed");
-
       const data = await ffmpeg.readFile(outputPath);
       const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
       const downloadUrl = URL.createObjectURL(videoBlob);
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_Export_${Date.now()}.${ext}`;
+      a.download = `deVee_${withSubtitles ? 'DUB' : 'CLEAN'}_${Date.now()}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
 
     } catch (err) {
       console.error("Export failed:", err);
-      alert("ייצוא נכשל - וודא שקובץ heebo.ttf נמצא בתיקיית public");
+      alert("Export failed");
     } finally {
       setIsExporting(false);
+      setExportProgress(0);
     }
   };
 
@@ -288,27 +298,6 @@ export default function Home() {
         setTimeout(() => setLoginError(false), 2000);
       }
     } catch (err) { console.error(err); } finally { setLoginLoading(false); }
-  };
-
-  const startDragging = (e: any) => {
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const startY = clientY;
-    const startPos = subtitlePos;
-    const onMove = (moveEvent: any) => {
-      const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
-      const delta = ((startY - currentY) / (canvasRef.current?.clientHeight || 500)) * 100;
-      setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
-    };
-    const onEnd = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onEnd);
-      document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('touchend', onEnd);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onEnd);
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('touchend', onEnd);
   };
 
   const LabelFooter = () => (
@@ -348,16 +337,25 @@ export default function Home() {
                 <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />
                 <canvas ref={canvasRef} className="w-full h-full object-contain" />
                 
-                {/* Play Icon Overlay */}
-                {!isPlaying && (
+                {/* Export Progress Overlay */}
+                {isExporting && (
+                  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md">
+                    <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden mb-4">
+                      <div className="h-full bg-[#A855F7] transition-all duration-300" style={{ width: `${exportProgress}%` }}></div>
+                    </div>
+                    <p className="text-[10px] font-black tracking-[0.5em] text-white uppercase animate-pulse">Burning {exportProgress}%</p>
+                  </div>
+                )}
+
+                {!isPlaying && !isExporting && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity">
-                    <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20">
-                      <div className="w-0 h-0 border-t-[10px] border-t-transparent border-l-[18px] border-l-white border-b-[10px] border-b-transparent ml-1" />
+                    <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20">
+                      <div className="w-0 h-0 border-t-[12px] border-t-transparent border-l-[22px] border-l-white border-b-[12px] border-b-transparent ml-2" />
                     </div>
                   </div>
                 )}
 
-                <div className="absolute left-0 right-0 flex justify-center px-6 text-center select-none z-30" style={{ bottom: `${subtitlePos}%` }} onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }} onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}>
+                <div className="absolute left-0 right-0 flex justify-center px-6 text-center select-none z-30" style={{ bottom: `${subtitlePos}%` }}>
                   <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
                 </div>
               </div>
@@ -371,37 +369,26 @@ export default function Home() {
           </div>
 
           {videoPreview && (
-             <div className="flex flex-col gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4">
-               {/* כפתור Play/Pause ייעודי + טיימרים */}
+             <div className="flex flex-col gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 shadow-inner">
                <div className="flex items-center justify-between px-2">
-                 <button onClick={togglePlay} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors">
+                 <button onClick={togglePlay} className="w-12 h-12 rounded-full bg-[#A855F7]/10 border border-[#A855F7]/20 flex items-center justify-center hover:bg-[#A855F7]/20 transition-all active:scale-95">
                     {isPlaying ? (
-                      <div className="flex gap-1">
-                        <div className="w-1 h-4 bg-white rounded-full"></div>
-                        <div className="w-1 h-4 bg-white rounded-full"></div>
+                      <div className="flex gap-1.5">
+                        <div className="w-1.5 h-4 bg-[#A855F7] rounded-full"></div>
+                        <div className="w-1.5 h-4 bg-[#A855F7] rounded-full"></div>
                       </div>
                     ) : (
-                      <div className="w-0 h-0 border-t-[6px] border-t-transparent border-l-[10px] border-l-white border-b-[6px] border-b-transparent ml-1"></div>
+                      <div className="w-0 h-0 border-t-[7px] border-t-transparent border-l-[12px] border-l-[#A855F7] border-b-[7px] border-b-transparent ml-1"></div>
                     )}
                  </button>
                  <div className="flex gap-2 text-[10px] font-mono text-white/40 uppercase tracking-widest">
-                    <span className="text-white">{formatTime(currentTime)}</span>
-                    <span>/</span>
-                    <span>{formatTime(duration)}</span>
+                    <span className="text-white bg-white/5 px-2 py-1 rounded-md">{formatTime(currentTime)}</span>
+                    <span className="py-1">/</span>
+                    <span className="py-1">{formatTime(duration)}</span>
                  </div>
                </div>
-
-               {/* סרגל הניגון (Timeline) */}
                <div className="px-2">
-                 <input 
-                   type="range" 
-                   min="0" 
-                   max={duration || 100} 
-                   step="0.01" 
-                   value={currentTime} 
-                   onChange={handleSeek} 
-                   className="w-full h-1 bg-white/10 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer" 
-                 />
+                 <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="w-full h-1.5 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer" />
                </div>
              </div>
           )}
@@ -422,25 +409,39 @@ export default function Home() {
           </div>
 
           <div className="h-24 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 flex gap-3 items-center overflow-x-auto no-scrollbar">
-            {transcription.map((item, i) => (
-              <div key={i} className={`h-full min-w-[110px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${currentTime >= item.start && currentTime <= item.end ? 'bg-[#A855F7]/30 border-[#A855F7]' : 'bg-white/[0.02] border-white/5'}`}>
-                <input value={item.word} onChange={(e) => {
-                   const updated = [...transcription];
-                   updated[i].word = e.target.value;
-                   setTranscription(updated);
-                }} className="bg-transparent border-none outline-none text-[11px] text-white font-bold text-center w-full focus:text-[#A855F7]" />
-                <button onClick={() => { const updated = transcription.filter((_, idx) => idx !== i); setTranscription(updated); }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/50 rounded-full text-[8px] flex items-center justify-center hover:bg-red-500 transition-colors">✕</button>
-              </div>
-            ))}
+            {transcription.length > 0 ? (
+              transcription.map((item, i) => (
+                <div key={i} className={`h-full min-w-[110px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${currentTime >= item.start && currentTime <= item.end ? 'bg-[#A855F7]/30 border-[#A855F7]' : 'bg-white/[0.02] border-white/5'}`}>
+                  <input value={item.word} onChange={(e) => {
+                     const updated = [...transcription];
+                     updated[i].word = e.target.value;
+                     setTranscription(updated);
+                  }} className="bg-transparent border-none outline-none text-[11px] text-white font-bold text-center w-full focus:text-[#A855F7]" />
+                  <button onClick={() => { const updated = transcription.filter((_, idx) => idx !== i); setTranscription(updated); }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/50 rounded-full text-[8px] flex items-center justify-center hover:bg-red-500 transition-colors">✕</button>
+                </div>
+              ))
+            ) : (
+              <div className="w-full text-center text-[8px] uppercase tracking-[0.3em] text-white/10 font-bold">Waiting for Dub...</div>
+            )}
           </div>
 
-          <div className="flex justify-center gap-4 pt-4">
-            <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`px-12 py-4 rounded-full uppercase tracking-[0.3em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}>
-              {isDubbing ? 'Syncing...' : '1. DUB!'}
-            </button>
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-center gap-4">
+              <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
+                {isDubbing ? 'Syncing...' : '1. DUB!'}
+              </button>
+              
+              {/* כפתור ה-Test המבוקש */}
+              {file && transcription.length === 0 && !isDubbing && (
+                <button onClick={() => exportVideo(false)} disabled={isExporting} className="px-8 py-4 border border-white/10 rounded-full uppercase tracking-[0.4em] text-[8px] font-bold text-white/40 hover:bg-white/5 transition-all">
+                  Test Export
+                </button>
+              )}
+            </div>
+
             {transcription.length > 0 && (
-              <button onClick={exportVideo} disabled={isExporting} className={`px-12 py-4 rounded-full uppercase tracking-[0.3em] text-[9px] font-black transition-all ${!isExporting ? 'bg-white text-black shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}>
-                {isExporting ? 'Burning...' : '2. DOWNLOAD'}
+              <button onClick={() => exportVideo(true)} disabled={isExporting} className={`w-full py-5 rounded-full uppercase tracking-[0.5em] text-[10px] font-black transition-all ${!isExporting ? 'bg-white text-black shadow-[0_0_40px_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-95' : 'bg-white/5 text-white/20'}`}>
+                {isExporting ? `Burning ${exportProgress}%` : '2. DOWNLOAD FINAL'}
               </button>
             )}
           </div>

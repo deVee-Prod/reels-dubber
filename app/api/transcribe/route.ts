@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-    // וודא שהמודל הוא gemini-1.5-flash או gemini-2.0-flash-exp (תלוי מה זמין לך ב-API Key)
+    // וודא שהמודל הוא gemini-1.5-flash או gemini-2.5-flash-exp (תלוי מה זמין לך ב-API Key)
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const arrayBuffer = await file.arrayBuffer();

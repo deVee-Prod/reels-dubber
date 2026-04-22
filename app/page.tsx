@@ -151,6 +151,10 @@ export default function Home() {
     setCurrentTime(newTime);
     if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
     if (audioRef.current) audioRef.current.currentTime = newTime;
+    if (videoObjRef.current && canvasRef.current && (!isPlaying || audioRef.current?.paused)) {
+       const ctx = canvasRef.current.getContext('2d');
+       if (ctx) ctx.drawImage(videoObjRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+    }
   };
 
   const loadFFmpeg = async () => {
@@ -164,7 +168,6 @@ export default function Home() {
         setExportProgress(Math.round(progress * 100));
       });
       
-      // נשתמש בגרסה יציבה. במידה ואתה עובר ל-st (Single Thread) שנה ללינק המתאים.
       const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
       await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
@@ -258,7 +261,7 @@ export default function Home() {
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
           
-          // הוספת fontfile=Roboto.ttf לפילטר
+          // הוספת fontfile=Roboto.ttf לפילטר לפי הנחיית קלוד
           return `drawtext=fontfile=Roboto.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
@@ -277,12 +280,12 @@ export default function Home() {
       if (result !== 0) throw new Error("Encoding failed");
 
       const data = await ffmpeg.readFile(outputPath);
-      const videoBlob = new Blob([data as any], { type: 'video/mp4' });
+      const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
       const downloadUrl = URL.createObjectURL(videoBlob);
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_Export_${Date.now()}.mp4`;
+      a.download = `deVee_Export_${Date.now()}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

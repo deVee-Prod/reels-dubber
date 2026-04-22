@@ -15,6 +15,7 @@ export default function Home() {
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
   const [currentTime, setCurrentTime] = useState(0); 
+  const [subtitlePos, setSubtitlePos] = useState(25); // מיקום התחלתי באחוזים מהתחתית
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
@@ -90,9 +91,7 @@ export default function Home() {
     setTranscription(updated);
   };
 
-  // פונקציה משופרת למציאת המילה הנוכחית - מפחיתה דיליי
   const getCurrentWord = () => {
-    // הוספת "באפר" קטן של 0.1 שניות כדי לפצות על השיהוי של הנגן
     const adjustedTime = currentTime + 0.1;
     return transcription.find(
       (w) => adjustedTime >= w.start && adjustedTime <= w.end
@@ -130,6 +129,25 @@ export default function Home() {
       setVideoPreview(URL.createObjectURL(uploadedFile));
       setTranscription([]); 
     }
+  };
+
+  // פונקציית עזר לגרירת הכתוביות
+  const startDragging = (e: React.MouseEvent) => {
+    const startY = e.clientY;
+    const startPos = subtitlePos;
+    
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = ((startY - moveEvent.clientY) / (videoRef.current?.clientHeight || 500)) * 100;
+      setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
+    };
+    
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
   };
 
   if (!authorized) {
@@ -185,11 +203,16 @@ export default function Home() {
                 className="w-full h-full object-contain"
                 onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
               />
-              {/* כתוביות Heebo משופרות: קטנות יותר, גבוהות יותר וללא דיליי */}
-              <div className="absolute bottom-[25%] left-0 right-0 flex justify-center pointer-events-none px-6 text-center">
+              {/* מכולת כתוביות ניתנת לגרירה עם אנימציית Pulse */}
+              <div 
+                className="absolute left-0 right-0 flex justify-center pointer-events-auto cursor-ns-resize active:cursor-grabbing px-6 text-center"
+                style={{ bottom: `${subtitlePos}%` }}
+                onMouseDown={startDragging}
+              >
                  {getCurrentWord() && (
                    <span 
-                    className="text-white text-3xl font-black drop-shadow-[0_4px_10px_rgba(0,0,0,1)] uppercase tracking-tight" 
+                    key={getCurrentWord().word}
+                    className="text-white text-3xl font-black drop-shadow-[0_4px_10px_rgba(0,0,0,1)] uppercase tracking-tight animate-in zoom-in duration-150" 
                     style={{ fontFamily: 'Heebo, sans-serif' }}
                    >
                      {getCurrentWord().word}

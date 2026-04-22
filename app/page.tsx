@@ -168,12 +168,22 @@ export default function Home() {
         setExportProgress(Math.round(progress * 100));
       });
 
-      // מעבר ל-CDN יציב יותר שלא חוסם CORS
+      ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
+
       const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
-await ffmpeg.load({
-  coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-  wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-});
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      });
+      
+      ffmpegRef.current = ffmpeg;
+      return ffmpeg;
+    } catch (err) {
+      console.error("FFmpeg Load Error:", err);
+      alert("שגיאה בטעינת מנוע העריכה. נסה לרענן את העמוד.");
+      return null;
+    }
+  };
       
       ffmpegRef.current = ffmpeg;
       return ffmpeg;

@@ -22,32 +22,50 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
   const audioRef = useRef<HTMLAudioElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const subtitleRef = useRef<HTMLSpanElement>(null); 
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
 
+  // --- לולאת requestAnimationFrame: מצייר פריימים לקנבס + מסנכרן כתוביות ---
   const syncSubtitles = () => {
-    if (videoRef.current && subtitleRef.current && transcription.length > 0) {
-      const time = videoRef.current.currentTime + globalOffset;
-      setCurrentTime(videoRef.current.currentTime);
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const subtitle = subtitleRef.current;
+
+    // ציור פריים הוידאו על הקנבס
+    if (video && canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        canvas.width = video.videoWidth || canvas.offsetWidth;
+        canvas.height = video.videoHeight || canvas.offsetHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    // סנכרון כתוביות — בדיוק כמו קודם
+    if (video && subtitle && transcription.length > 0) {
+      const time = video.currentTime + globalOffset;
+      setCurrentTime(video.currentTime);
       const wordObj = transcription.find(w => time >= w.start && time <= w.end);
       
       if (wordObj) {
         if (lastWordRef.current !== wordObj.word + wordObj.start) {
-          subtitleRef.current.innerText = wordObj.word;
-          subtitleRef.current.style.display = "inline-block";
+          subtitle.innerText = wordObj.word;
+          subtitle.style.display = "inline-block";
           const index = transcription.findIndex(w => w.start === wordObj.start);
           const sizes = [28, 42, 58];
           const dynamicSize = sizes[index % 3] * fontScale;
-          subtitleRef.current.style.fontSize = `${dynamicSize}px`;
+          subtitle.style.fontSize = `${dynamicSize}px`;
           lastWordRef.current = wordObj.word + wordObj.start;
         }
       } else {
-        subtitleRef.current.style.display = "none";
+        subtitle.style.display = "none";
         lastWordRef.current = "";
       }
     }
+
     requestRef.current = requestAnimationFrame(syncSubtitles);
   };
 
@@ -57,44 +75,6 @@ export default function Home() {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
   }, [transcription, fontScale, globalOffset]);
-
-  // --- תיקון iOS: חסימת fullscreen אקטיבית ---
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const block = (e: Event) => { e.preventDefault(); };
-    video.addEventListener('webkitbeginfullscreen', block);
-    video.addEventListener('webkitendfullscreen', block);
-    return () => {
-      video.removeEventListener('webkitbeginfullscreen', block);
-      video.removeEventListener('webkitendfullscreen', block);
-    };
-  }, [videoPreview]);
-
-  // --- סנכרון אודיו לוידאו ---
-  useEffect(() => {
-    const video = videoRef.current;
-    const audio = audioRef.current;
-    if (!video || !audio) return;
-
-    const syncAudio = () => {
-      if (Math.abs(audio.currentTime - video.currentTime) > 0.1) {
-        audio.currentTime = video.currentTime;
-      }
-    };
-
-    const onSeeked = () => {
-      audio.currentTime = video.currentTime;
-    };
-
-    video.addEventListener('timeupdate', syncAudio);
-    video.addEventListener('seeked', onSeeked);
-
-    return () => {
-      video.removeEventListener('timeupdate', syncAudio);
-      video.removeEventListener('seeked', onSeeked);
-    };
-  }, [videoPreview]);
 
   const adjustOffset = (amount: number) => {
     setGlobalOffset(prev => prev + amount);
@@ -179,7 +159,7 @@ export default function Home() {
     document.addEventListener('touchend', onEnd);
   };
 
-  // --- Play/Pause מסונכרן בין וידאו לאודיו ---
+  // --- Play/Pause: וידאו (מוסתר) + אודיו נפרד ---
   const togglePlay = () => {
     const video = videoRef.current;
     const audio = audioRef.current;
@@ -257,21 +237,23 @@ export default function Home() {
             {videoPreview ? (
               <div className="relative w-full h-full">
 
-                {/* וידאו ללא שמע — muted אמיתי ל-iOS */}
-                <video 
-                  ref={videoRef} 
+                {/* וידאו מוסתר לחלוטין — רץ ברקע, iOS לא רואה אותו */}
+                <video
+                  ref={videoRef}
                   src={videoPreview}
                   playsInline
-                  webkit-playsinline="true"
-                  x-webkit-airplay="deny"
-                  disablePictureInPicture
-                  controlsList="nodownload nofullscreen noremoteplayback"
                   muted
-                  className="w-full h-full object-contain pointer-events-none"
+                  style={{ display: 'none' }}
                 />
 
-                {/* אודיו נפרד — מנגן את השמע במקום הוידאו */}
+                {/* אודיו נפרד לשמע */}
                 <audio ref={audioRef} src={videoPreview} />
+
+                {/* קנבס — מה שהמשתמש רואה */}
+                <canvas
+                  ref={canvasRef}
+                  className="w-full h-full object-contain"
+                />
 
                 {/* כפתור Play/Pause שקוף */}
                 <button

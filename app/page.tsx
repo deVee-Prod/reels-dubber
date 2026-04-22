@@ -153,6 +153,7 @@ export default function Home() {
     setCurrentTime(newTime);
     if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
     if (audioRef.current) audioRef.current.currentTime = newTime;
+    
     if (videoObjRef.current && canvasRef.current && (!isPlaying || audioRef.current?.paused)) {
        const ctx = canvasRef.current.getContext('2d');
        if (ctx) ctx.drawImage(videoObjRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -220,7 +221,6 @@ export default function Home() {
 
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
-      // משיכת הפונט המקומית מהתיקייה שלך
       const fontRes = await fetch('/heebo.ttf');
       if (!fontRes.ok) throw new Error("Font file not found in public folder");
       const fontData = await fontRes.arrayBuffer();
@@ -347,6 +347,8 @@ export default function Home() {
               <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
                 <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />
                 <canvas ref={canvasRef} className="w-full h-full object-contain" />
+                
+                {/* Play Icon Overlay */}
                 {!isPlaying && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity">
                     <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20">
@@ -354,6 +356,7 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+
                 <div className="absolute left-0 right-0 flex justify-center px-6 text-center select-none z-30" style={{ bottom: `${subtitlePos}%` }} onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }} onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}>
                   <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
                 </div>
@@ -368,10 +371,38 @@ export default function Home() {
           </div>
 
           {videoPreview && (
-             <div className="flex items-center gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4">
-               <span className="text-[10px] font-mono text-white/50 w-8 text-right">{formatTime(currentTime)}</span>
-               <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="flex-1 h-1 bg-white/10 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer" />
-               <span className="text-[10px] font-mono text-white/50 w-8">{formatTime(duration)}</span>
+             <div className="flex flex-col gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4">
+               {/* כפתור Play/Pause ייעודי + טיימרים */}
+               <div className="flex items-center justify-between px-2">
+                 <button onClick={togglePlay} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors">
+                    {isPlaying ? (
+                      <div className="flex gap-1">
+                        <div className="w-1 h-4 bg-white rounded-full"></div>
+                        <div className="w-1 h-4 bg-white rounded-full"></div>
+                      </div>
+                    ) : (
+                      <div className="w-0 h-0 border-t-[6px] border-t-transparent border-l-[10px] border-l-white border-b-[6px] border-b-transparent ml-1"></div>
+                    )}
+                 </button>
+                 <div className="flex gap-2 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                    <span className="text-white">{formatTime(currentTime)}</span>
+                    <span>/</span>
+                    <span>{formatTime(duration)}</span>
+                 </div>
+               </div>
+
+               {/* סרגל הניגון (Timeline) */}
+               <div className="px-2">
+                 <input 
+                   type="range" 
+                   min="0" 
+                   max={duration || 100} 
+                   step="0.01" 
+                   value={currentTime} 
+                   onChange={handleSeek} 
+                   className="w-full h-1 bg-white/10 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer" 
+                 />
+               </div>
              </div>
           )}
 

@@ -1,82 +1,48 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from 'openai';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
-    const file = formData.get('audio') as Blob;
+    const audioBlob = formData.get('audio') as Blob;
     
-    if (!file) {
+    if (!audioBlob) {
       return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const file = new File([audioBlob], "audio.mp3", { type: "audio/mp3" });
 
-    const arrayBuffer = await file.arrayBuffer();
-    const base64Audio = Buffer.from(arrayBuffer).toString('base64');
+    // השימוש ב-whisper-1 מבטיח את המנוע הכי עדכני שלהם
+    const transcription = await openai.audio.transcriptions.create({
+      file: file,
+      model: "whisper-1", // זה ה-V3 האופטימלי
+      response_format: "verbose_json", // חובה כדי לקבל נתונים מפורטים
+      timestamp_granularities: ["word"], // היכולת החדשה ביותר לסנכרון מילים
+      language: "he", 
+    });
 
-    const prompt = `
-      תמלל את האודיו מילה במילה
-      החזר JSON בלבד במבנה הבא:
-      [
-        {"word": "מילה", "start": 0.1, "end": 0.5},
-        ...
-      ]
-      חשוב: תן עדיפות עליונה לזמן ההתחלה (start) של כל מילה
-    `;
-
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          mimeType: "audio/mp3",
-          data: base64Audio
-        }
-      }
-    ]);
-
-    const responseText = result.response.text();
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error("No JSON found");
-    
-    const transcriptionData = JSON.parse(jsonMatch[0]);
+    if (!transcription.words) {
+      throw new Error("Word-level timestamps not supported or returned");
+    }
 
     const formattedTranscription = [{
-      text: transcriptionData.map((w: any) => w.word).join(' '),
-      words: transcriptionData.map((w: any, index: number) => {
-        const oStart = Number(w.start);
-        const oEnd = Number(w.end);
-        const duration = oEnd - oStart;
+      text: transcription.text,
+      words: transcription.words.map((w: any, index: number) => {
+        // ב-Whisper העדכני, ה-Start הוא ה-Transient האמיתי.
+        // אנחנו נותנים קיזוז של 40ms רק בשביל הפסיכולוגיה של העין
+        const start = Math.max(0, w.start - 0.04);
+        let end = w.end;
 
-        // אלגוריתם קיזוז דינמי (Dynamic Lookahead)
-        let lookahead = 0.15; 
-        if (duration < 0.35) {
-            lookahead = 0.22; // דיבור מהיר - הקדמה אגרסיבית
-        } else if (duration > 0.6) {
-            lookahead = 0.10; // דיבור איטי - הקדמה עדינה
-        }
-
-        let start = Math.max(0, oStart - lookahead);
-        
-        // כיווץ משך המילה דינמי - חותכים יותר חזק במילים מהירות
-        const blockScale = duration < 0.35 ? 0.75 : 0.85; 
-        let end = start + (duration * blockScale);
-
-        // מניעת התנגשויות שלוקחת בחשבון את המילה הבאה
-        if (index < transcriptionData.length - 1) {
-            const nextOStart = Number(transcriptionData[index + 1].start);
-            const nextDuration = Number(transcriptionData[index + 1].end) - nextOStart;
-            
-            let nextLookahead = 0.15;
-            if (nextDuration < 0.35) nextLookahead = 0.22;
-            else if (nextDuration > 0.6) nextLookahead = 0.10;
-
-            const nextS = Math.max(0, nextOStart - nextLookahead);
-            
-            if (end > nextS) {
-                end = nextS - 0.01; 
-            }
+        // מניעת חפיפה
+        if (transcription.words && index < transcription.words.length - 1) {
+          const nextStart = transcription.words[index + 1].start - 0.04;
+          if (end > nextStart) {
+            end = nextStart - 0.01;
+          }
         }
 
         return {
@@ -90,7 +56,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ transcription: formattedTranscription });
 
   } catch (error: any) {
-    console.error("Gemini Error:", error);
+    console.error("Whisper API Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

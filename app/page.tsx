@@ -385,7 +385,7 @@ export default function Home() {
         </header>
 
         <div className="w-full space-y-4 md:space-y-8">
-          <div className="relative w-full aspect-[9/16] max-h-[45vh] md:max-h-[70vh] md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
+          <div className="relative w-full h-[40vh] md:h-auto md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
                 <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />

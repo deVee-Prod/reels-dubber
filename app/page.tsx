@@ -26,7 +26,6 @@ export default function Home() {
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
 
-  // סנכרון כתוביות
   const syncSubtitles = () => {
     if (videoRef.current && subtitleRef.current && transcription.length > 0) {
       const time = videoRef.current.currentTime + globalOffset;
@@ -37,7 +36,8 @@ export default function Home() {
           subtitleRef.current.innerText = wordObj.word;
           subtitleRef.current.style.display = "inline-block";
           const index = transcription.findIndex(w => w.start === wordObj.start);
-          const dynamicSize = [28, 42, 58][index % 3] * fontScale;
+          const sizes = [28, 42, 58];
+          const dynamicSize = sizes[index % 3] * fontScale;
           subtitleRef.current.style.fontSize = `${dynamicSize}px`;
           lastWordRef.current = wordObj.word + wordObj.start;
         }
@@ -54,7 +54,6 @@ export default function Home() {
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [transcription, fontScale, globalOffset]);
 
-  // הגדרות "ברזל" למובייל - חובה להריץ כל פעם שיש Preview חדש
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoPreview) return;
@@ -63,21 +62,19 @@ export default function Home() {
     video.defaultMuted = true;
     video.setAttribute('playsinline', '');
     video.setAttribute('webkit-playsinline', 'true');
-    video.load(); // מכריח את ה-iOS לטעון את ההגדרות החדשות של ה-Blob
+    video.load();
 
     const handleFullscreen = (e: any) => { e.preventDefault(); return false; };
     video.addEventListener('webkitbeginfullscreen', handleFullscreen, false);
     return () => video.removeEventListener('webkitbeginfullscreen', handleFullscreen);
   }, [videoPreview]);
 
-  // הטיפול החדש בהעלאת קובץ - הופך את ה-Blob לידידותי ל-iOS
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
     if (uploadedFile) {
       setFile(uploadedFile);
       
-      // במקום URL.createObjectURL פשוט, אנחנו יוצרים Blob חדש עם MIME type מפורש
-      // זה עוזר ל-WebKit להבין איך לרנדר את זה Inline
+      // הטכניקה לעקיפת ה-Blob המקורי של iOS
       const buffer = await uploadedFile.arrayBuffer();
       const blob = new Blob([buffer], { type: 'video/mp4' }); 
       const url = URL.createObjectURL(blob);
@@ -90,7 +87,11 @@ export default function Home() {
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video) return;
-    video.paused ? video.play().catch(() => {}) : video.pause();
+    if (video.paused) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
   };
 
   const loadFFmpeg = async () => {
@@ -214,23 +215,23 @@ export default function Home() {
         <div className="w-full space-y-8 pb-10">
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
-              <div className=\"relative w-full h-full\">
-                <video ref={videoRef} src={videoPreview} playsInline webkit-playsinline=\"true\" muted className=\"w-full h-full object-contain\" />
-                <div className=\"absolute inset-0 z-20 bg-transparent cursor-pointer\" onClick={togglePlay} />
+              <div className="relative w-full h-full">
+                <video ref={videoRef} src={videoPreview} playsInline muted className="w-full h-full object-contain pointer-events-none" />
+                <div className="absolute inset-0 z-20 bg-transparent cursor-pointer" onClick={togglePlay} />
                 <div 
-                  className=\"absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-30\"
+                  className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-30"
                   style={{ bottom: `${subtitlePos}%` }}
                   onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }}
                   onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
                 >
-                  <span ref={subtitleRef} className=\"text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter\" style={{ fontFamily: 'Heebo, sans-serif', display: 'none', pointerEvents: 'none' }} />
+                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter" style={{ fontFamily: 'Heebo, sans-serif', display: 'none', pointerEvents: 'none' }} />
                 </div>
               </div>
             ) : (
-              <div onClick={() => fileInputRef.current?.click()} className=\"h-full w-full flex flex-col items-center justify-center cursor-pointer space-y-4\">
-                <div className=\"w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mx-auto text-white/20 text-xl\">+</div>
-                <p className=\"text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold\">Upload Media</p>
-                <input type=\"file\" ref={fileInputRef} onChange={handleFileUpload} className=\"hidden\" accept=\"video/*\" />
+              <div onClick={() => fileInputRef.current?.click()} className="h-full w-full flex flex-col items-center justify-center cursor-pointer space-y-4">
+                <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mx-auto text-white/20 text-xl">+</div>
+                <p className="text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold">Upload Media</p>
+                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
               </div>
             )}
           </div>

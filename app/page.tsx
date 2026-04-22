@@ -385,7 +385,6 @@ export default function Home() {
         </header>
 
         <div className="w-full space-y-6">
-          {/* מכולת הסרטון עם גובה מוגבל למובייל */}
           <div className="relative w-full aspect-video md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
@@ -485,12 +484,32 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col gap-3 pb-20">
-            <button onClick={handleDub} disabled={!file || isDubbing} className={`w-full py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
-              {isDubbing ? 'Syncing...' : '1. DUB!'}
-            </button>
-            
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={handleDub} 
+                disabled={!file || isDubbing} 
+                className={`flex-[3] py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}
+              >
+                {isDubbing ? 'Syncing...' : '1. DUB!'}
+              </button>
+              
+              {file && transcription.length === 0 && !isDubbing && (
+                <button 
+                  onClick={() => exportVideo(false)} 
+                  disabled={isExporting} 
+                  className="flex-1 py-4 border border-white/10 rounded-full uppercase tracking-[0.4em] text-[8px] font-bold text-white/40 hover:bg-white/5 transition-all text-center"
+                >
+                  Test
+                </button>
+              )}
+            </div>
+
             {transcription.length > 0 && (
-              <button onClick={() => exportVideo(true)} disabled={isExporting} className={`w-full py-5 rounded-full uppercase tracking-[0.5em] text-[10px] font-black transition-all ${!isExporting ? 'bg-white text-black shadow-[0_0_40px_rgba(255,255,255,0.2)] active:scale-95' : 'bg-white/5 text-white/20'}`}>
+              <button 
+                onClick={() => exportVideo(true)} 
+                disabled={isExporting} 
+                className={`w-full py-5 rounded-full uppercase tracking-[0.5em] text-[10px] font-black transition-all ${!isExporting ? 'bg-white text-black shadow-[0_0_40px_rgba(255,255,255,0.2)] active:scale-95' : 'bg-white/5 text-white/20'}`}
+              >
                 {isExporting ? `Burning ${exportProgress}%` : '2. DOWNLOAD FINAL'}
               </button>
             )}

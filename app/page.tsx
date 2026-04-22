@@ -242,13 +242,17 @@ export default function Home() {
       // 1. כתיבת קובץ הוידאו
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
-      // 2. כתיבת פונט Heebo לזיכרון של FFmpeg
+      // 2. כתיבת פונט Heebo לזיכרון של FFmpeg (תיקון fetch למניעת 404)
       try {
-        const fontUrl = `${window.location.origin}/heebo.ttf?v=${Date.now()}`;
-        const fontData = await fetchFile(fontUrl);
-        await ffmpeg.writeFile('myfont.ttf', fontData);
+        const fontRes = await fetch('/heebo.ttf');
+        if (!fontRes.ok) throw new Error("Font not found - 404");
+        const fontBuffer = await fontRes.arrayBuffer();
+        await ffmpeg.writeFile('myfont.ttf', new Uint8Array(fontBuffer));
       } catch (e) {
-        console.error("Font file heebo.ttf not found!");
+        console.error("Font fetch error:", e);
+        alert("לא מצאתי את הפונט! ודא ש-heebo.ttf נמצא בתיקיית public ושמו באותיות קטנות");
+        setIsExporting(false);
+        return; 
       }
 
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
@@ -256,7 +260,7 @@ export default function Home() {
       if (withSubtitles && transcription.length > 0) {
         const subtitleFilters = transcription.map((item, index) => {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
-          // שימוש ב-scaleRatio כדי להגדיל את הפונט בהתאם לרזולוציה המקורית
+          // הגדלת הפונט בהתאם לרזולוציית הוידאו המקורית
           const fontSize = Math.round(baseSize * scaleRatio); 
           
           let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
@@ -264,7 +268,7 @@ export default function Home() {
           const startT = Math.max(0, item.start + globalOffset);
           const endT = Math.max(0, item.end + globalOffset);
           
-          // מיקום יחסי ופרופורציות למסגרת
+          // מיקום יחסי ופרופורציות
           const yPos = `h-(h*${subtitlePos}/100)-text_h`;
           const borderW = Math.max(1, Math.round(3 * scaleRatio));
           const shadowOff = Math.max(1, Math.round(2 * scaleRatio));

@@ -210,7 +210,7 @@ export default function Home() {
         setTranscription(allWords);
       }
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      alert(`Error in DUB: ${error.message}`);
     } finally {
       setIsDubbing(false);
     }
@@ -233,23 +233,6 @@ export default function Home() {
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
 
       if (withSubtitles && transcription.length > 0) {
-        let fontReady = false;
-        
-        try {
-          const fontRes = await fetch('/heebo.ttf');
-          if (fontRes.ok) {
-            const fontData = await fontRes.arrayBuffer();
-            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
-            fontReady = true;
-          }
-        } catch (e) { console.warn("Font load failed"); }
-
-        if (!fontReady) {
-          alert("שגיאה: הקובץ heebo.ttf לא נמצא בתיקיית public. הייצוא הופסק.");
-          setIsExporting(false);
-          return;
-        }
-
         const subtitleFilters = transcription.map((item, index) => {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
           const fontSize = Math.round(baseSize * 1.5); 
@@ -259,7 +242,8 @@ export default function Home() {
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
           
-          return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+          // שימוש בפונט המובנה של FFmpeg - פותר את כל בעיות ה-404
+          return `drawtext=text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }
@@ -292,7 +276,7 @@ export default function Home() {
 
     } catch (err: any) {
       console.error("Export failed:", err);
-      alert("Export failed: " + err.message);
+      alert("הייצוא נכשל: " + err.message);
     } finally {
       setIsExporting(false);
       setExportProgress(0);
@@ -400,7 +384,7 @@ export default function Home() {
                   onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }} 
                   onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
                 >
-                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
+                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'sans-serif', display: 'none' }} />
                 </div>
               </div>
             ) : (

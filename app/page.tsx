@@ -15,11 +15,27 @@ export default function Home() {
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
   const [currentTime, setCurrentTime] = useState(0); 
-  const [subtitlePos, setSubtitlePos] = useState(25); // מיקום התחלתי באחוזים מהתחתית
+  const [subtitlePos, setSubtitlePos] = useState(25);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
   const ffmpegRef = useRef<any>(null);
+  const requestRef = useRef<number>(null); // רפרנס ללופ הסנכרון
+
+  // לופ סנכרון מהיר (60fps) כדי למנוע דיליי בכתוביות
+  const animate = () => {
+    if (videoRef.current && !videoRef.current.paused) {
+      setCurrentTime(videoRef.current.currentTime);
+    }
+    requestRef.current = requestAnimationFrame(animate);
+  };
+
+  useEffect(() => {
+    requestRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    };
+  }, []);
 
   const loadFFmpeg = async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
@@ -43,7 +59,6 @@ export default function Home() {
 
   const handleDub = async () => {
     if (!file || !ffmpegLoaded || !ffmpegRef.current) return;
-    
     setIsDubbing(true);
     const ffmpeg = ffmpegRef.current;
     const { fetchFile } = await import('@ffmpeg/util');
@@ -53,15 +68,9 @@ export default function Home() {
       await ffmpeg.exec(['-i', 'input_video', '-vn', '-ab', '128k', 'output_audio.mp3']);
       const data = await ffmpeg.readFile('output_audio.mp3');
       const audioBlob = new Blob([data as any], { type: 'audio/mp3' });
-
       const formData = new FormData();
       formData.append('audio', audioBlob);
-
-      const response = await fetch('/api/transcribe', {
-        method: 'POST',
-        body: formData,
-      });
-
+      const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
       const result = await response.json();
       
       if (result.transcription) {
@@ -73,7 +82,6 @@ export default function Home() {
       } else {
         throw new Error(result.error || 'Transcription failed');
       }
-
     } catch (error: any) {
       setIsDubbing(false);
       alert(`Debug: ${error.message}`);
@@ -91,13 +99,30 @@ export default function Home() {
     setTranscription(updated);
   };
 
+  // לוגיקת סנכרון קריטית: מחפשת את המילה עם "הקדמה" קלה של 150ms
   const getCurrentWord = () => {
-    const adjustedTime = currentTime + 0.1;
-    return transcription.find(
-      (w) => adjustedTime >= w.start && adjustedTime <= w.end
-    );
+    if (transcription.length === 0) return null;
+    const offset = 0.15; // 150 מילישניות הקדמה כדי לפצות על Latency
+    const time = currentTime + offset;
+    return transcription.find(w => time >= w.start && time <= w.end);
   };
 
+  const startDragging = (e: React.MouseEvent) => {
+    const startY = e.clientY;
+    const startPos = subtitlePos;
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = ((startY - moveEvent.clientY) / (videoRef.current?.clientHeight || 500)) * 100;
+      setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  // ... (handleLogin, handleFileUpload נשארים זהים)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
@@ -129,25 +154,6 @@ export default function Home() {
       setVideoPreview(URL.createObjectURL(uploadedFile));
       setTranscription([]); 
     }
-  };
-
-  // פונקציית עזר לגרירת הכתוביות
-  const startDragging = (e: React.MouseEvent) => {
-    const startY = e.clientY;
-    const startPos = subtitlePos;
-    
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const delta = ((startY - moveEvent.clientY) / (videoRef.current?.clientHeight || 500)) * 100;
-      setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
-    };
-    
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-    
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
   };
 
   if (!authorized) {
@@ -184,12 +190,9 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#050505] text-white font-sans flex flex-col items-center py-12 px-6">
-      
       <header className="w-full max-w-2xl flex flex-col items-center mb-16 space-y-2">
         <Image src="/logo.png" alt="deVee" width={90} height={30} className="opacity-80" />
-        <span className="text-[10px] tracking-[0.3em] text-white/40 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-          REELS DUBBER
-        </span>
+        <span className="text-[10px] tracking-[0.3em] text-white/40 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] uppercase">REELS DUBBER</span>
       </header>
 
       <div className="w-full max-w-2xl space-y-8">
@@ -201,9 +204,9 @@ export default function Home() {
                 src={videoPreview} 
                 controls 
                 className="w-full h-full object-contain"
+                // ה-onTimeUpdate נשאר כגיבוי, אבל animate() עושה את העבודה הקשה
                 onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
               />
-              {/* מכולת כתוביות ניתנת לגרירה עם אנימציית Pulse */}
               <div 
                 className="absolute left-0 right-0 flex justify-center pointer-events-auto cursor-ns-resize active:cursor-grabbing px-6 text-center"
                 style={{ bottom: `${subtitlePos}%` }}
@@ -212,7 +215,7 @@ export default function Home() {
                  {getCurrentWord() && (
                    <span 
                     key={getCurrentWord().word}
-                    className="text-white text-3xl font-black drop-shadow-[0_4px_10px_rgba(0,0,0,1)] uppercase tracking-tight animate-in zoom-in duration-150" 
+                    className="text-white text-3xl font-black drop-shadow-[0_4px_10px_rgba(0,0,0,1)] uppercase tracking-tight animate-in zoom-in duration-100" 
                     style={{ fontFamily: 'Heebo, sans-serif' }}
                    >
                      {getCurrentWord().word}
@@ -229,6 +232,7 @@ export default function Home() {
           )}
         </div>
 
+        {/* Timeline */}
         <div className="w-full space-y-3">
           <div className="flex justify-between items-center px-2">
             <span className="text-[7px] uppercase tracking-[0.3em] text-white/20 font-bold">Monitor</span>
@@ -250,12 +254,7 @@ export default function Home() {
                     onChange={(e) => handleWordEdit(i, e.target.value)}
                     className="bg-transparent border-none outline-none text-[10px] text-white font-bold text-center w-full focus:text-[#A855F7]"
                   />
-                  <button 
-                    onClick={() => handleWordDelete(i)}
-                    className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500/50 hover:bg-red-500 rounded-full text-[7px] flex items-center justify-center transition-colors"
-                  >
-                    ✕
-                  </button>
+                  <button onClick={() => handleWordDelete(i)} className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500/50 hover:bg-red-500 rounded-full text-[7px] flex items-center justify-center transition-colors">✕</button>
                   <span className="text-[6px] text-white/20 absolute bottom-1">{item.start.toFixed(1)}s</span>
                 </div>
               ))
@@ -267,6 +266,7 @@ export default function Home() {
           </div>
         </div>
 
+        {/* DUB Button */}
         <div className="flex flex-col items-center space-y-6 pt-4">
           <button 
             onClick={handleDub}
@@ -277,17 +277,8 @@ export default function Home() {
           >
             {!ffmpegLoaded ? 'Loading Engine...' : isDubbing ? 'Syncing...' : 'DUB!'}
           </button>
-          
-          <p className="text-[7px] tracking-[0.2em] text-white/10 uppercase italic text-center max-w-[200px]">
-              Neural engine will process speech and sync timeline automatically
-          </p>
         </div>
       </div>
-
-      <footer className="mt-auto pt-20 pb-4 flex flex-col items-center space-y-3">
-        <span className="text-[9px] tracking-[0.1em] text-white/40 font-light">Powered By deVee Boutique Label</span>
-        <Image src="/label_logo.jpg" alt="deVee Label" width={32} height={32} className="rounded-full opacity-60 hover:opacity-100 transition-opacity cursor-pointer shadow-xl" />
-      </footer>
     </main>
   );
 }

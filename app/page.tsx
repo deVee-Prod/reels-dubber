@@ -234,25 +234,25 @@ export default function Home() {
       const inputPath = `input_${Date.now()}.${ext}`;
       const outputPath = `output_${Date.now()}.${ext}`;
 
-      // חישוב יחס ההמרה בין תצוגת המסך לרזולוציית הוידאו המקורית
       const videoH = videoObjRef.current?.videoHeight || 1920;
       const previewH = canvasRef.current?.clientHeight || 500;
       const scaleRatio = videoH / previewH;
 
-      // 1. כתיבת קובץ הוידאו
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
-      // 2. כתיבת פונט Heebo לזיכרון של FFmpeg (תיקון fetch למניעת 404)
+      // התיקון הקריטי: Heebo.ttf עם H גדולה בדיוק כמו ב-GitHub!
       try {
-        const fontRes = await fetch('/heebo.ttf');
-        if (!fontRes.ok) throw new Error("Font not found - 404");
+        const fontUrl = `${window.location.origin}/Heebo.ttf?v=${Date.now()}`;
+        console.log("Fetching font from:", fontUrl);
+        const fontRes = await fetch(fontUrl);
+        if (!fontRes.ok) throw new Error("Font fetch failed");
         const fontBuffer = await fontRes.arrayBuffer();
         await ffmpeg.writeFile('myfont.ttf', new Uint8Array(fontBuffer));
       } catch (e) {
-        console.error("Font fetch error:", e);
-        alert("לא מצאתי את הפונט! ודא ש-heebo.ttf נמצא בתיקיית public ושמו באותיות קטנות");
+        console.error("Font loading error:", e);
+        alert("הפונט לא נמצא בשרת. וודא שהשם ב-GitHub תואם בדיוק!");
         setIsExporting(false);
-        return; 
+        return;
       }
 
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
@@ -260,7 +260,6 @@ export default function Home() {
       if (withSubtitles && transcription.length > 0) {
         const subtitleFilters = transcription.map((item, index) => {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
-          // הגדלת הפונט בהתאם לרזולוציית הוידאו המקורית
           const fontSize = Math.round(baseSize * scaleRatio); 
           
           let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
@@ -268,7 +267,6 @@ export default function Home() {
           const startT = Math.max(0, item.start + globalOffset);
           const endT = Math.max(0, item.end + globalOffset);
           
-          // מיקום יחסי ופרופורציות
           const yPos = `h-(h*${subtitlePos}/100)-text_h`;
           const borderW = Math.max(1, Math.round(3 * scaleRatio));
           const shadowOff = Math.max(1, Math.round(2 * scaleRatio));

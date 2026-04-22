@@ -262,9 +262,11 @@ export default function Home() {
           const endT = Math.max(0, Number((item.end + currentOffset).toFixed(3)));
           
           const yPos = `h-(h*${subtitlePos}/100)-text_h`;
+          
+          // הגדרת מסגרת (Stroke) סופר עדינה ובלתי מורגשת
+          const borderW = Math.max(0.5, 0.8 * scaleRatio); 
 
-          // טקסט לבן נקי לחלוטין בלי שום אפקטים
-          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white`;
+          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black@0.3:borderw=${borderW}`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }

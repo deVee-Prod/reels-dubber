@@ -11,19 +11,19 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    // וודא שהמודל הוא gemini-1.5-flash או gemini-2.0-flash-exp (תלוי מה זמין לך ב-API Key)
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const arrayBuffer = await file.arrayBuffer();
     const base64Audio = Buffer.from(arrayBuffer).toString('base64');
 
-    // שיפור הפרומפט כדי לנסות לדייק את ג'מיני לטרנזיינט הראשון
     const prompt = `
-      תמלל את האודיו המצורף בצורה מדויקת מילה במילה
-      החזר את התוצאה בפורמט JSON בלבד, שבו לכל מילה יש:
-      1. את המילה עצמה (word)
-      2. זמן התחלה בשניות (start) - ציין את הרגע המדויק בו נשמע הצליל הראשון של המילה
-      3. זמן סיום בשניות (end)
-      אל תוסיף הסברים, רק את ה-JSON
+      תמלל את האודיו המצורף מילה במילה בצורה קיצונית.
+      הנחיות חשובות:
+      1. החזר JSON בלבד.
+      2. לכל מילה (word) חייב להיות זמן התחלה (start) וזמן סיום (end) מדויקים בשניות.
+      3. התמקד ברגע ה-Attack (הצליל הראשון) של כל מילה. אל תעגל זמנים.
+      4. אם יש מוזיקה ברקע, התעלם ממנה והתמקד רק בקול האנושי.
     `;
 
     const result = await model.generateContent([
@@ -40,17 +40,26 @@ export async function POST(req: Request) {
     const cleanJson = responseText.replace(/```json|```/g, "").trim();
     const transcriptionData = JSON.parse(cleanJson);
 
-    // התיקון שלנו: נקדים כל מילה ב-150 מילישניות כדי למנוע את "שרשרת העיכובים"
-    const lookaheadOffset = 0.15; 
+    // לוגיקת הדיוק הסופית:
+    // 1. הקדמה של 200 מילישניות (ה-Sweet Spot למוזיקה)
+    // 2. קיצור משך המילה ב-10% כדי למנוע "מריחה"
+    const lookahead = 0.20; 
 
     const formattedTranscription = [{
       text: transcriptionData.map((w: any) => w.word).join(' '),
-      words: transcriptionData.map((w: any) => ({
-        word: w.word,
-        // מחסרים את ההקדמה, ומוודאים שלא נרד מתחת ל-0
-        start: Math.max(0, Number(w.start) - lookaheadOffset),
-        end: Number(w.end)
-      }))
+      words: transcriptionData.map((w: any) => {
+        const start = Math.max(0, Number(w.start) - lookahead);
+        const end = Number(w.end);
+        // מוודאים שהמילה לא נעלמת מהר מדי אבל גם לא נמרחת
+        const duration = end - start;
+        const safeEnd = start + (duration * 0.9); 
+
+        return {
+          word: w.word,
+          start: Number(start.toFixed(3)),
+          end: Number(safeEnd.toFixed(3))
+        };
+      })
     }];
 
     return NextResponse.json({ transcription: formattedTranscription });

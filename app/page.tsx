@@ -10,12 +10,6 @@ const formatTime = (time: number) => {
   return `${m}:${s}`;
 };
 
-const fixRTL = (text: string) => {
-  const hebrewRegex = /[\u0590-\u05FF]/;
-  if (hebrewRegex.test(text)) return text.split('').reverse().join('');
-  return text;
-};
-
 export default function Home() {
   const [authorized, setAuthorized] = useState(false);
   const [password, setPassword] = useState('');
@@ -240,10 +234,8 @@ export default function Home() {
 
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
-      // התיקון הקריטי: Heebo.ttf עם H גדולה בדיוק כמו ב-GitHub!
       try {
         const fontUrl = `${window.location.origin}/Heebo.ttf?v=${Date.now()}`;
-        console.log("Fetching font from:", fontUrl);
         const fontRes = await fetch(fontUrl);
         if (!fontRes.ok) throw new Error("Font fetch failed");
         const fontBuffer = await fontRes.arrayBuffer();
@@ -262,8 +254,9 @@ export default function Home() {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
           const fontSize = Math.round(baseSize * scaleRatio); 
           
+          // הסרנו את ה-fixRTL! FFmpeg יעשה את זה לבד
           let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
-          safeWord = fixRTL(safeWord);
+          
           const startT = Math.max(0, item.start + globalOffset);
           const endT = Math.max(0, item.end + globalOffset);
           

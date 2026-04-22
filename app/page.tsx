@@ -123,24 +123,29 @@ export default function Home() {
   };
 
   const togglePlay = async () => {
-  const video = videoRef.current;
-  if (!video) return;
-
-  if (video.paused) {
-    // הגדרה אגרסיבית רגע לפני הנגינה
-    video.muted = true;
-    video.setAttribute('playsinline', 'true');
-    video.setAttribute('webkit-playsinline', 'true');
+    // שימוש ב-videoObjRef במקום videoRef
+    const video = videoObjRef.current;
+    const audio = audioRef.current;
     
-    try {
-      await video.play();
-    } catch (err) {
-      console.error("Playback failed", err);
+    if (!video || !audio) return;
+
+    if (audio.paused) {
+      // הגדרות "ברזל" למובייל רגע לפני הנגינה
+      video.muted = true;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
+      
+      try {
+        await video.play();
+        await audio.play();
+      } catch (err) {
+        console.error("Playback failed", err);
+      }
+    } else {
+      video.pause();
+      audio.pause();
     }
-  } else {
-    video.pause();
-  }
-};
+  };
 
   const loadFFmpeg = async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');

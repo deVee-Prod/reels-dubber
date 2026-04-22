@@ -30,19 +30,16 @@ export default function Home() {
     if (videoRef.current && subtitleRef.current && transcription.length > 0) {
       const time = videoRef.current.currentTime + globalOffset;
       setCurrentTime(videoRef.current.currentTime);
-
       const wordObj = transcription.find(w => time >= w.start && time <= w.end);
       
       if (wordObj) {
         if (lastWordRef.current !== wordObj.word + wordObj.start) {
           subtitleRef.current.innerText = wordObj.word;
           subtitleRef.current.style.display = "inline-block";
-          
           const index = transcription.findIndex(w => w.start === wordObj.start);
           const sizes = [28, 42, 58];
           const dynamicSize = sizes[index % 3] * fontScale;
           subtitleRef.current.style.fontSize = `${dynamicSize}px`;
-          
           lastWordRef.current = wordObj.word + wordObj.start;
         }
       } else {
@@ -104,7 +101,7 @@ export default function Home() {
           : result.transcription.flatMap((t: any) => t.words);
         setTranscription(allWords);
         setIsDubbing(false);
-      } else { throw new Error(result.error || 'Transcription failed'); }
+      }
     } catch (error: any) {
       setIsDubbing(false);
       alert(`Error: ${error.message}`);
@@ -126,33 +123,21 @@ export default function Home() {
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const startY = clientY;
     const startPos = subtitlePos;
-
     const onMove = (moveEvent: any) => {
       const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
       const delta = ((startY - currentY) / (videoRef.current?.clientHeight || 500)) * 100;
       setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
     };
-
     const onEnd = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onEnd);
       document.removeEventListener('touchmove', onMove);
       document.removeEventListener('touchend', onEnd);
     };
-
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onEnd);
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('touchend', onEnd);
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFile = e.target.files?.[0];
-    if (uploadedFile) {
-      setFile(uploadedFile);
-      setVideoPreview(URL.createObjectURL(uploadedFile));
-      setTranscription([]); 
-    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -182,7 +167,7 @@ export default function Home() {
   if (!authorized) {
     return (
       <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8">
-        <div className="w-full max-w-[340px] space-y-8">
+        <div className="w-full max-w-[340px] space-y-8 text-center">
           <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
           <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl">
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
@@ -194,95 +179,83 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white flex flex-col items-center py-12 px-6">
-      <header className="mb-16 text-center space-y-2">
-        <Image src="/logo.png" alt="deVee" width={90} height={30} className="opacity-80" />
-        <p className="text-[10px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
-      </header>
+    <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center">
+      <main className="flex-1 w-full max-w-2xl flex flex-col items-center py-12 px-6 space-y-8">
+        <header className="text-center space-y-2">
+          <Image src="/logo.png" alt="deVee" width={90} height={30} className="opacity-80 mx-auto" />
+          <p className="text-[10px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
+        </header>
 
-      <div className="w-full max-w-2xl space-y-8 pb-32">
-        <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl">
-          {videoPreview ? (
-            <div className="relative w-full h-full">
-              <video 
-                ref={videoRef} 
-                src={videoPreview} 
-                controls 
-                playsInline
-                muted
-                webkit-playsinline="true"
-                x5-playsinline="true"
-                className="w-full h-full object-contain" 
-              />
-              <div 
-                className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none"
-                style={{ bottom: `${subtitlePos}%` }}
-                onMouseDown={startDragging}
-                onTouchStart={startDragging}
-              >
-                <span 
-                  ref={subtitleRef}
-                  className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter" 
-                  style={{ 
-                    fontFamily: 'Heebo, sans-serif', 
-                    display: 'none',
-                    paintOrder: 'stroke fill',
-                    WebkitTextStroke: '1px rgba(0,0,0,0.3)',
-                    pointerEvents: 'none'
-                  }}
+        <div className="w-full space-y-8 pb-10">
+          <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
+            {videoPreview ? (
+              <div className="relative w-full h-full">
+                <video 
+                  ref={videoRef} 
+                  src={videoPreview} 
+                  controls 
+                  playsInline
+                  muted
+                  webkit-playsinline="true"
+                  className="w-full h-full object-contain" 
                 />
+                <div 
+                  className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none"
+                  style={{ bottom: `${subtitlePos}%` }}
+                  onMouseDown={startDragging}
+                  onTouchStart={startDragging}
+                >
+                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
+                </div>
+              </div>
+            ) : (
+              <div onClick={() => fileInputRef.current?.click()} className="h-full w-full flex flex-col items-center justify-center cursor-pointer space-y-4">
+                <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mx-auto text-white/20 text-xl">+</div>
+                <p className="text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold">Upload Media</p>
+                <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ setFile(f); setVideoPreview(URL.createObjectURL(f)); } }} className="hidden" accept="video/*" />
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+              <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
+              <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7]" />
+            </div>
+            <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+              <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Sync</span>
+              <div className="flex items-center space-x-3">
+                <button onClick={() => adjustOffset(-0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">-</button>
+                <span className="text-[8px] font-mono text-[#A855F7]">{globalOffset.toFixed(2)}s</span>
+                <button onClick={() => adjustOffset(0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">+</button>
               </div>
             </div>
-          ) : (
-            <div onClick={() => fileInputRef.current?.click()} className="h-full flex flex-col items-center justify-center cursor-pointer space-y-4">
-              <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mx-auto text-white/20 text-xl">+</div>
-              <p className="text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold">Upload Media</p>
-              <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
-            </div>
-          )}
-        </div>
-
-        {/* Sync & Size Panel */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
-            <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7] h-1 bg-white/10 rounded-full appearance-none cursor-pointer" />
           </div>
 
-          <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Sync</span>
-            <div className="flex items-center space-x-3">
-              <button onClick={() => adjustOffset(-0.05)} className="w-6 h-6 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-[10px] text-white/40">-</button>
-              <span className="text-[8px] font-mono text-[#A855F7] w-12 text-center">{globalOffset > 0 ? '+' : ''}{globalOffset.toFixed(2)}s</span>
-              <button onClick={() => adjustOffset(0.05)} className="w-6 h-6 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-[10px] text-white/40">+</button>
-            </div>
-          </div>
-        </div>
-
-        {/* Neural Timeline */}
-        <div className="space-y-3">
           <div className="h-24 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 flex gap-3 items-center overflow-x-auto no-scrollbar">
             {transcription.map((item, i) => (
               <div key={i} className={`h-full min-w-[110px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${currentTime >= item.start && currentTime <= item.end ? 'bg-[#A855F7]/30 border-[#A855F7]' : 'bg-white/[0.02] border-white/5'}`}>
-                <input value={item.word} onChange={(e) => handleWordEdit(i, e.target.value)} className="bg-transparent border-none outline-none text-[11px] text-white font-bold text-center w-full" />
+                <input value={item.word} onChange={(e) => handleWordEdit(i, e.target.value)} className="bg-transparent border-none outline-none text-[11px] text-white font-bold text-center w-full focus:text-[#A855F7]" />
                 <button onClick={() => handleWordDelete(i)} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/50 rounded-full text-[8px] flex items-center justify-center">✕</button>
-                <span className="text-[7px] text-white/20 mt-1">{item.start.toFixed(1)}s</span>
               </div>
             ))}
           </div>
-        </div>
 
-        {/* Footer Actions */}
-        <div className="flex justify-center pt-4">
-          <button 
-            onClick={handleDub} 
-            disabled={!file || isDubbing || !ffmpegLoaded} 
-            className={`px-16 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_40px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}
-          >
-            {isDubbing ? 'Syncing...' : 'DUB!'}
-          </button>
+          <div className="flex justify-center pt-4">
+            <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`px-16 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_40px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}>
+              {isDubbing ? 'Syncing...' : 'DUB!'}
+            </button>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+
+      {/* Footer המקורי - Powered By deVee */}
+      <footer className="w-full py-12 flex flex-col items-center space-y-4 opacity-40">
+        <p className="text-[10px] tracking-[0.2em] font-medium text-white/60">Powered By deVee Boutique Label</p>
+        <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 relative shadow-2xl">
+           <Image src="/label-logo.png" alt="deVee Label" fill className="object-cover scale-110" />
+        </div>
+      </footer>
+    </div>
   );
 }

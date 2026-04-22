@@ -27,6 +27,7 @@ export default function Home() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0); 
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
   const [currentTime, setCurrentTime] = useState(0); 
   const [duration, setDuration] = useState(0); 
@@ -158,49 +159,37 @@ export default function Home() {
   };
 
   const loadFFmpeg = async () => {
-    if (ffmpegRef.current) return;
-    try {
-      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-      const { toBlobURL } = await import('@ffmpeg/util');
-      const ffmpeg = new FFmpeg();
-      ffmpegRef.current = ffmpeg;
-      
-      ffmpeg.on('progress', ({ progress }) => {
-        setExportProgress(Math.round(progress * 100));
-      });
+    const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+    const { toBlobURL } = await import('@ffmpeg/util');
+    const ffmpeg = new FFmpeg();
+    ffmpegRef.current = ffmpeg;
+    
+    ffmpeg.on('progress', ({ progress }) => {
+      setExportProgress(Math.round(progress * 100));
+    });
 
-      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-      });
-    } catch (err) {
-      console.error("FFmpeg Load Error:", err);
-    }
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    setFfmpegLoaded(true);
   };
 
   useEffect(() => {
     if (document.cookie.includes('session_access')) {
       setAuthorized(true);
-      loadFFmpeg(); // מתחיל לטעון ברקע
+      loadFFmpeg();
     }
   }, []);
 
   const handleDub = async () => {
     if (!file) return;
     setIsDubbing(true);
-
-    // אם המנוע עוד לא מוכן, נטען אותו עכשיו בלי שהמשתמש יראה כפתור נעול
-    if (!ffmpegRef.current) {
-        await loadFFmpeg();
-    }
+    
+    if (!ffmpegRef.current) await loadFFmpeg();
     const ffmpeg = ffmpegRef.current;
-    if (!ffmpeg) {
-        alert("תקלה בטעינת המנוע. נסה לרענן את העמוד.");
-        setIsDubbing(false);
-        return;
-    }
-
+    
     const { fetchFile } = await import('@ffmpeg/util');
     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
     try {
@@ -230,16 +219,8 @@ export default function Home() {
     setIsExporting(true);
     setExportProgress(0);
     
-    if (!ffmpegRef.current) {
-        await loadFFmpeg();
-    }
+    if (!ffmpegRef.current) await loadFFmpeg();
     const ffmpeg = ffmpegRef.current;
-    if (!ffmpeg) {
-        alert("תקלה בטעינת המנוע. נסה לרענן את העמוד.");
-        setIsExporting(false);
-        return;
-    }
-
     const { fetchFile } = await import('@ffmpeg/util');
 
     try {
@@ -261,13 +242,12 @@ export default function Home() {
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
           
-          // הגרסה הבטוחה לחלוטין: בלי פונט בכלל! הכל יעבוד עם פונט המערכת.
           return `drawtext=text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }
 
-      const result = await ffmpeg.exec([
+      await ffmpeg.exec([
         '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
@@ -277,15 +257,13 @@ export default function Home() {
         outputPath
       ]);
 
-      if (result !== 0) throw new Error("Encoding failed");
-
       const data = await ffmpeg.readFile(outputPath);
       const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
       const downloadUrl = URL.createObjectURL(videoBlob);
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_Export_${Date.now()}.${ext}`;
+      a.download = `deVee_Export.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -295,7 +273,7 @@ export default function Home() {
 
     } catch (err: any) {
       console.error("Export failed:", err);
-      alert("Export failed - check console");
+      alert("Export failed");
     } finally {
       setIsExporting(false);
       setExportProgress(0);

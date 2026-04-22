@@ -11,6 +11,7 @@ export default function Home() {
   
   const [file, setFile] = useState<File | null>(null);
   const [isDubbing, setIsDubbing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false); // State לייצוא
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
@@ -21,13 +22,12 @@ export default function Home() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null); // מנגן את הסאונד
+  const audioRef = useRef<HTMLAudioElement>(null); 
   const subtitleRef = useRef<HTMLSpanElement>(null); 
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
   
-  // Ghost Video - וידאו שחי רק בזיכרון ולא ב-DOM
   const videoObjRef = useRef<HTMLVideoElement | null>(null);
 
   // לולאת הציור והסנכרון המרכזית
@@ -37,7 +37,6 @@ export default function Home() {
     const canvas = canvasRef.current;
     
     if (video && audio && canvas) {
-      // 1. ציור הפריים לקנבס
       if (!video.paused && !video.ended) {
          const ctx = canvas.getContext('2d');
          if (ctx && video.videoWidth > 0) {
@@ -48,13 +47,11 @@ export default function Home() {
            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
          }
          
-         // iOS Optimization: הבטחה שהוידאו הוירטואלי והאודיו מסונכרנים
          if (Math.abs(video.currentTime - audio.currentTime) > 0.2) {
             video.currentTime = audio.currentTime;
          }
       }
 
-      // 2. סנכרון הכתוביות לפי זמן האודיו האמיתי
       if (subtitleRef.current && transcription.length > 0) {
         const time = audio.currentTime + globalOffset;
         setCurrentTime(audio.currentTime);
@@ -84,21 +81,16 @@ export default function Home() {
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [transcription, fontScale, globalOffset]);
 
-  // טיפול בעריכת המדיה והמרתה ל-Ghost Player
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
     if (uploadedFile) {
       setFile(uploadedFile);
-      
-      // המרה ל-Blob כדי לעקוף שגיאות סטרימינג מקומיות ב-iOS
       const buffer = await uploadedFile.arrayBuffer();
       const blob = new Blob([buffer], { type: 'video/mp4' }); 
       const url = URL.createObjectURL(blob);
-      
       setVideoPreview(url);
       setTranscription([]); 
 
-      // יצירת הוידאו הוירטואלי (ללא הכנסה ל-DOM)
       const video = document.createElement('video');
       video.src = url;
       video.muted = true;
@@ -107,7 +99,6 @@ export default function Home() {
       video.setAttribute('playsinline', 'true');
       video.setAttribute('webkit-playsinline', 'true');
       
-      // ציור הפריים הראשון ברגע שהסרטון נטען בזיכרון
       video.addEventListener('loadeddata', () => {
         const ctx = canvasRef.current?.getContext('2d');
         if (ctx && canvasRef.current && video.videoWidth > 0) {
@@ -123,18 +114,14 @@ export default function Home() {
   };
 
   const togglePlay = async () => {
-    // שימוש ב-videoObjRef במקום videoRef
     const video = videoObjRef.current;
     const audio = audioRef.current;
-    
     if (!video || !audio) return;
 
     if (audio.paused) {
-      // הגדרות "ברזל" למובייל רגע לפני הנגינה
       video.muted = true;
       video.setAttribute('playsinline', 'true');
       video.setAttribute('webkit-playsinline', 'true');
-      
       try {
         await video.play();
         await audio.play();
@@ -191,6 +178,60 @@ export default function Home() {
     } catch (error: any) {
       setIsDubbing(false);
       alert(`Error: ${error.message}`);
+    }
+  };
+
+  // פונקציית ייצוא והורדה
+  const exportVideo = async () => {
+    if (!file || !ffmpegLoaded || !ffmpegRef.current || transcription.length === 0) return;
+    setIsExporting(true);
+    const ffmpeg = ffmpegRef.current;
+
+    try {
+      // טעינת פונט Heebo לייצוא
+      const fontRes = await fetch('https://raw.githubusercontent.com/googlefonts/heebo/main/fonts/ttf/Heebo-Black.ttf');
+      const fontData = await fontRes.arrayBuffer();
+      await ffmpeg.writeFile('font.ttf', new Uint8Array(fontData));
+
+      // בניית הפילטרים לצריבת הכתוביות
+      const filters = transcription.map((item, index) => {
+        const baseSize = [28, 42, 58][index % 3] * fontScale;
+        const fontSize = Math.round(baseSize * 1.5); 
+        const safeWord = item.word.replace(/'/g, "\u2019").replace(/:/g, "\\:");
+        const startT = Math.max(0, item.start + globalOffset);
+        const endT = Math.max(0, item.end + globalOffset);
+        const yPos = `h-(h*${subtitlePos}/100)`;
+
+        return `drawtext=fontfile=/font.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black:shadowx=2:shadowy=2`;
+      });
+
+      const filterGraph = filters.join(',');
+
+      await ffmpeg.exec([
+        '-i', 'input_video',
+        '-vf', filterGraph,
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-c:a', 'copy',
+        'output_final.mp4'
+      ]);
+
+      const data = await ffmpeg.readFile('output_final.mp4');
+      const videoBlob = new Blob([data as any], { type: 'video/mp4' });
+      const downloadUrl = URL.createObjectURL(videoBlob);
+
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = 'deVee_Reels_Dubber.mp4';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+    } catch (err) {
+      console.error("Export failed:", err);
+      alert("Error exporting video");
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -269,17 +310,12 @@ export default function Home() {
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full">
-                
-                {/* אין תגית וידאו! רק אודיו נסתר שמריץ את הסאונד */}
                 <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline />
-                
-                {/* הקנבס שמציג את הפריים מהזיכרון */}
                 <canvas 
                   ref={canvasRef} 
                   className="w-full h-full object-contain cursor-pointer" 
                   onClick={togglePlay} 
                 />
-
                 <div 
                   className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-30"
                   style={{ bottom: `${subtitlePos}%` }}
@@ -321,14 +357,38 @@ export default function Home() {
                    updated[i].word = e.target.value;
                    setTranscription(updated);
                 }} className="bg-transparent border-none outline-none text-[11px] text-white font-bold text-center w-full focus:text-[#A855F7]" />
+                {/* כפתור מחיקת מילה */}
+                <button 
+                  onClick={() => {
+                    const updated = transcription.filter((_, idx) => idx !== i);
+                    setTranscription(updated);
+                  }}
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/50 rounded-full text-[8px] flex items-center justify-center hover:bg-red-500 transition-colors"
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
 
-          <div className="flex justify-center pt-4">
-            <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`px-16 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_40px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}>
-              {isDubbing ? 'Syncing...' : 'DUB!'}
+          <div className="flex justify-center gap-4 pt-4">
+            <button 
+              onClick={handleDub} 
+              disabled={!file || isDubbing || !ffmpegLoaded} 
+              className={`px-12 py-4 rounded-full uppercase tracking-[0.3em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}
+            >
+              {isDubbing ? 'Syncing...' : '1. DUB!'}
             </button>
+
+            {transcription.length > 0 && (
+              <button 
+                onClick={exportVideo} 
+                disabled={isExporting} 
+                className={`px-12 py-4 rounded-full uppercase tracking-[0.3em] text-[9px] font-black transition-all ${!isExporting ? 'bg-white text-black shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}
+              >
+                {isExporting ? 'Burning...' : '2. DOWNLOAD'}
+              </button>
+            )}
           </div>
         </div>
       </main>

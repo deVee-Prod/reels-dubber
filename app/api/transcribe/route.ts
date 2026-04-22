@@ -18,13 +18,22 @@ export async function POST(req: Request) {
 
     const prompt = `
       תמלל את האודיו מילה במילה.
-      החזר JSON בלבד: [{"word": "מילה", "start": 1.23, "end": 1.45}]
-      דגש קריטי: סמן את ה-start בדיוק ברגע פתיחת הפה (העיצור הראשון).
+      החזר JSON בלבד במבנה הבא:
+      [
+        {"word": "מילה", "start": 0.1, "end": 0.5},
+        ...
+      ]
+      חשוב: תן עדיפות עליונה לזמן ההתחלה (start) של כל מילה.
     `;
 
     const result = await model.generateContent([
       prompt,
-      { inlineData: { mimeType: "audio/mp3", data: base64Audio } }
+      {
+        inlineData: {
+          mimeType: "audio/mp3",
+          data: base64Audio
+        }
+      }
     ]);
 
     const responseText = result.response.text();
@@ -33,9 +42,9 @@ export async function POST(req: Request) {
     
     const transcriptionData = JSON.parse(jsonMatch[0]);
 
-    // הגדרות "פינצטה" חדשות:
-    const lookahead = 0.08; // הקדמה עדינה יותר כדי לא להקדים מדי
-    const tailCut = 0.65;   // קיצוץ זנב אגרסיבי יותר (נשאר רק 65% מהמילה)
+    // חזרה לערכים שעבדו טוב + ליטוש קטן
+    const lookahead = 0.18; // הקדמה שמבטיחה פאנץ'
+    const blockScale = 0.85; // משאירים 85% מהמילה (יותר יציב מ-65% או 70%)
 
     const formattedTranscription = [{
       text: transcriptionData.map((w: any) => w.word).join(' '),
@@ -45,14 +54,13 @@ export async function POST(req: Request) {
         const duration = oEnd - oStart;
 
         let start = Math.max(0, oStart - lookahead);
-        // המילה תהיה קצרה ופאנצ'ית
-        let end = start + (duration * tailCut);
+        let end = start + (duration * blockScale);
 
-        // מניעת חפיפה עם המילה הבאה
+        // מניעת חפיפה קריטית
         if (index < transcriptionData.length - 1) {
             const nextS = Math.max(0, Number(transcriptionData[index + 1].start) - lookahead);
             if (end > nextS) {
-                end = nextS - 0.02; // מרווח ביטחון של 20 מילישניות
+                end = nextS - 0.01; // חיתוך מילימטרי לפני המילה הבאה
             }
         }
 

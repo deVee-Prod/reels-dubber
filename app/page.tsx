@@ -159,21 +159,25 @@ export default function Home() {
   };
 
   const loadFFmpeg = async () => {
-    const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-    const { toBlobURL } = await import('@ffmpeg/util');
-    const ffmpeg = new FFmpeg();
-    ffmpegRef.current = ffmpeg;
-    
-    ffmpeg.on('progress', ({ progress }) => {
-      setExportProgress(Math.round(progress * 100));
-    });
+    try {
+      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+      const { toBlobURL } = await import('@ffmpeg/util');
+      const ffmpeg = new FFmpeg();
+      ffmpegRef.current = ffmpeg;
+      
+      ffmpeg.on('progress', ({ progress }) => {
+        setExportProgress(Math.round(progress * 100));
+      });
 
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-    setFfmpegLoaded(true);
+      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      });
+      setFfmpegLoaded(true);
+    } catch (err) {
+      console.error("FFmpeg Load Error:", err);
+    }
   };
 
   useEffect(() => {
@@ -184,12 +188,9 @@ export default function Home() {
   }, []);
 
   const handleDub = async () => {
-    if (!file) return;
+    if (!file || !ffmpegLoaded || !ffmpegRef.current) return;
     setIsDubbing(true);
-    
-    if (!ffmpegRef.current) await loadFFmpeg();
     const ffmpeg = ffmpegRef.current;
-    
     const { fetchFile } = await import('@ffmpeg/util');
     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
     try {
@@ -201,25 +202,26 @@ export default function Home() {
       formData.append('audio', audioBlob);
       const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
       const result = await response.json();
+      
       if (result.transcription) {
         const allWords = Array.isArray(result.transcription[0]?.words) 
           ? result.transcription[0].words 
           : result.transcription.flatMap((t: any) => t.words);
         setTranscription(allWords);
-        setIsDubbing(false);
+      } else {
+        alert("תקלה בתמלול: לא התקבל טקסט מהשרת.");
       }
     } catch (error: any) {
+      alert(`Error in DUB: ${error.message}`);
+    } finally {
       setIsDubbing(false);
-      alert(`Error: ${error.message}`);
     }
   };
 
   const exportVideo = async (withSubtitles: boolean) => {
-    if (!file) return;
+    if (!file || !ffmpegLoaded || !ffmpegRef.current) return;
     setIsExporting(true);
     setExportProgress(0);
-    
-    if (!ffmpegRef.current) await loadFFmpeg();
     const ffmpeg = ffmpegRef.current;
     const { fetchFile } = await import('@ffmpeg/util');
 
@@ -233,6 +235,27 @@ export default function Home() {
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
 
       if (withSubtitles && transcription.length > 0) {
+        let fontReady = false;
+        
+        // משיכה נקייה ופשוטה מתיקיית public
+        try {
+          const fontRes = await fetch('/heebo.ttf');
+          if (fontRes.ok) {
+            const fontData = await fontRes.arrayBuffer();
+            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
+            fontReady = true;
+          }
+        } catch (e) {
+          console.warn("Could not fetch font");
+        }
+
+        // הגנה מפני קריסה
+        if (!fontReady) {
+          alert("שגיאה: הקובץ heebo.ttf לא נמצא. וודא שהוא בתיקיית public באותיות קטנות. הייצוא הופסק.");
+          setIsExporting(false);
+          return;
+        }
+
         const subtitleFilters = transcription.map((item, index) => {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
           const fontSize = Math.round(baseSize * 1.5); 
@@ -242,12 +265,12 @@ export default function Home() {
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
           
-          return `drawtext=text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+          return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }
 
-      await ffmpeg.exec([
+      const result = await ffmpeg.exec([
         '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
@@ -257,13 +280,15 @@ export default function Home() {
         outputPath
       ]);
 
+      if (result !== 0) throw new Error("Encoding failed");
+
       const data = await ffmpeg.readFile(outputPath);
       const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
       const downloadUrl = URL.createObjectURL(videoBlob);
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_Export.${ext}`;
+      a.download = `deVee_Export_${Date.now()}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -273,7 +298,7 @@ export default function Home() {
 
     } catch (err: any) {
       console.error("Export failed:", err);
-      alert("Export failed");
+      alert("הייצוא נכשל: " + err.message);
     } finally {
       setIsExporting(false);
       setExportProgress(0);
@@ -452,7 +477,7 @@ export default function Home() {
 
           <div className="flex flex-col gap-4">
             <div className="flex justify-center gap-4">
-              <button onClick={handleDub} disabled={!file || isDubbing} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
+              <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
                 {isDubbing ? 'Syncing...' : '1. DUB!'}
               </button>
               

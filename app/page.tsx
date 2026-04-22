@@ -377,15 +377,15 @@ export default function Home() {
   }
 
   return (
-    <div className="fixed inset-0 bg-[#050505] text-white overflow-y-auto overflow-x-hidden">
-      <main className="w-full max-w-2xl mx-auto flex flex-col items-center py-8 px-4 space-y-6 pb-40">
+    <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center overflow-y-auto overflow-x-hidden">
+      <main className="w-full max-w-2xl mx-auto flex flex-col items-center py-6 md:py-12 px-4 md:px-6 space-y-6 md:space-y-8 pb-32">
         <header className="text-center space-y-2">
           <Image src="/logo.png" alt="deVee" width={80} height={26} className="opacity-80 mx-auto" />
           <p className="text-[9px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
         </header>
 
-        <div className="w-full space-y-6">
-          <div className="relative w-full aspect-video md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] overflow-hidden shadow-2xl flex items-center justify-center">
+        <div className="w-full space-y-6 md:space-y-8">
+          <div className="relative w-full aspect-[9/16] max-h-[50vh] md:max-h-none md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
                 <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />
@@ -402,7 +402,7 @@ export default function Home() {
 
                 {!isPlaying && !isExporting && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                    <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 shadow-2xl">
+                    <div className="w-16 h-16 md:w-20 md:h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 shadow-2xl">
                       <div className="w-0 h-0 border-t-[10px] border-t-transparent border-l-[18px] border-l-white border-b-[10px] border-b-transparent ml-2" />
                     </div>
                   </div>
@@ -427,7 +427,7 @@ export default function Home() {
           </div>
 
           {videoPreview && (
-             <div className="flex flex-col gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4">
+             <div className="flex flex-col gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 shadow-inner">
                <div className="flex items-center justify-between px-2">
                  <button onClick={togglePlay} className="w-10 h-10 rounded-full bg-[#A855F7]/10 border border-[#A855F7]/20 flex items-center justify-center active:scale-95">
                     {isPlaying ? (
@@ -451,17 +451,17 @@ export default function Home() {
              </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
               <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7]" />
             </div>
             <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Position</span>
-              <div className="flex items-center space-x-4">
-                <button onClick={() => setSubtitlePos(prev => Math.max(10, prev - 5))} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs">▼</button>
+              <div className="flex items-center space-x-4 md:space-x-3">
+                <button onClick={() => setSubtitlePos(prev => Math.max(10, prev - 5))} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs active:scale-90 transition-transform">▼</button>
                 <span className="text-[8px] font-mono text-[#A855F7]">{Math.round(subtitlePos)}%</span>
-                <button onClick={() => setSubtitlePos(prev => Math.min(90, prev + 5))} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs">▲</button>
+                <button onClick={() => setSubtitlePos(prev => Math.min(90, prev + 5))} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs active:scale-90 transition-transform">▲</button>
               </div>
             </div>
           </div>
@@ -483,7 +483,7 @@ export default function Home() {
             )}
           </div>
 
-          <div className="flex flex-col gap-3 pb-20">
+          <div className="flex flex-col gap-3 md:gap-4 pb-20">
             <div className="flex items-center gap-3">
               <button 
                 onClick={handleDub} 

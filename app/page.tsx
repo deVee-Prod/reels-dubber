@@ -261,12 +261,10 @@ export default function Home() {
           const startT = Math.max(0, Number((item.start + currentOffset).toFixed(3)));
           let endT = Math.max(0, Number((item.end + currentOffset).toFixed(3)));
           
-          // מנגנון מניעת החפיפה החכם: חותך את המילה לפני שהבאה מתחילה
           const nextItem = transcription[index + 1];
           if (nextItem) {
               const nextStartT = Math.max(0, Number((nextItem.start + currentOffset).toFixed(3)));
               if (endT > nextStartT) {
-                  // משאיר לפחות 50 מילישניות כדי שהמילה לא תעלם מיד
                   endT = Math.max(startT + 0.05, nextStartT - 0.01); 
               }
           }
@@ -283,9 +281,9 @@ export default function Home() {
         '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
-        '-preset', 'veryfast', // נותן מהירות עבודה טובה בלי להקריב איכות ב-CRF נמוך
-        '-crf', '17',          // הרמה הכי גבוהה לשמירה על איכות המקור
-        '-c:a', 'copy',        // שומר על הסאונד המקורי בדיוק כמו שהוא (חשוב לך כיוצר!)
+        '-preset', 'veryfast',
+        '-crf', '17',           // איכות מקסימלית לשמירה על המקור
+        '-c:a', 'copy',         // שומר על הסאונד המקורי בלי קידוד מחדש
         outputPath
       ]);
 
@@ -458,12 +456,13 @@ export default function Home() {
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
               <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7]" />
             </div>
+            {/* כפתורי ה-Position החדשים במקום ה-Sync */}
             <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-              <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Sync</span>
+              <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Position</span>
               <div className="flex items-center space-x-3">
-                <button onClick={() => setGlobalOffset(prev => prev - 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">-</button>
-                <span className="text-[8px] font-mono text-[#A855F7]">{globalOffset.toFixed(2)}s</span>
-                <button onClick={() => setGlobalOffset(prev => prev + 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">+</button>
+                <button onClick={() => setSubtitlePos(prev => Math.max(10, prev - 5))} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center text-xs">▼</button>
+                <span className="text-[8px] font-mono text-[#A855F7]">{Math.round(subtitlePos)}%</span>
+                <button onClick={() => setSubtitlePos(prev => Math.min(90, prev + 5))} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center text-xs">▲</button>
               </div>
             </div>
           </div>

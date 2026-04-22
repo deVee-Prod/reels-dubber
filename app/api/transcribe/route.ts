@@ -11,20 +11,20 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-    // חזרה ל-2.5 Flash כמו שביקשת!
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const arrayBuffer = await file.arrayBuffer();
     const base64Audio = Buffer.from(arrayBuffer).toString('base64');
 
     const prompt = `
-      תמלל את האודיו המצורף מילה במילה.
+      תמלל את האודיו המצורף מילה במילה
       החזר JSON בלבד במבנה הבא:
       [
         {"word": "מילה", "start": 0.1, "end": 0.5},
         ...
       ]
-      חשוב: דייק מאוד בזמני ההתחלה (start). אל תוסיף הסברים או טקסט נוסף.
+      חשוב: דייק מאוד בזמני ההתחלה (start) וזמני הסיום (end) ברמת המילישנייה
+      אל תוסיף הסברים או טקסט נוסף
     `;
 
     const result = await model.generateContent([
@@ -39,7 +39,6 @@ export async function POST(req: Request) {
 
     const responseText = result.response.text();
     
-    // שליפת ה-JSON מתוך התשובה (מטפל במקרים שהמודל מוסיף ```json)
     const jsonMatch = responseText.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
         throw new Error("Could not find JSON in response");
@@ -47,14 +46,30 @@ export async function POST(req: Request) {
     
     const transcriptionData = JSON.parse(jsonMatch[0]);
 
-    // האסטרטגיה לדיוק: 200 מילישניות הקדמה (lookahead)
-    const lookahead = 0.20; 
+    const lookahead = 0.15; 
 
     const formattedTranscription = [{
       text: transcriptionData.map((w: any) => w.word).join(' '),
-      words: transcriptionData.map((w: any) => {
-        const start = Math.max(0, Number(w.start) - lookahead);
-        const end = Number(w.end);
+      words: transcriptionData.map((w: any, index: number) => {
+        const originalStart = Number(w.start);
+        const originalEnd = Number(w.end);
+        const duration = originalEnd - originalStart;
+
+        let start = Math.max(0, originalStart - lookahead);
+        
+        // האינטואיציה שלך בפעולה: מקצצים את אורך הבלוק ב-30%
+        let end = start + (duration * 0.70);
+
+        // מנגנון הגנה חריף: מוודא חיתוך לפני שהמילה הבאה נכנסת
+        if (index < transcriptionData.length - 1) {
+            const nextStartOriginal = Number(transcriptionData[index + 1].start);
+            const nextStartCalculated = Math.max(0, nextStartOriginal - lookahead);
+            
+            if (end > nextStartCalculated) {
+                end = nextStartCalculated - 0.05;
+            }
+        }
+
         return {
           word: w.word,
           start: Number(start.toFixed(3)),

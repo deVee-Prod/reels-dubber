@@ -26,7 +26,7 @@ export default function Home() {
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
 
-  // --- לוגיקת הסנכרון (ללא שינוי) ---
+  // --- לוגיקת הסנכרון ---
   const syncSubtitles = () => {
     if (videoRef.current && subtitleRef.current && transcription.length > 0) {
       const time = videoRef.current.currentTime + globalOffset;
@@ -55,17 +55,16 @@ export default function Home() {
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [transcription, fontScale, globalOffset]);
 
-  // --- התיקון הקריטי למובייל (הזרקה ישירה ל-DOM) ---
+  // --- התיקון למובייל: הגדרות נגן ---
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    // הגדרות "ברזל" שדפדפני מובייל דורשים דרך JS
     video.muted = true;
     video.defaultMuted = true;
     video.setAttribute('playsinline', '');
     video.setAttribute('webkit-playsinline', 'true');
-    video.setAttribute('disableRemotePlayback', 'true'); // מונע מ-AirPlay להשתלט
+    video.setAttribute('disableRemotePlayback', 'true');
 
     const handleFullscreen = (e: any) => {
       e.preventDefault();
@@ -86,7 +85,6 @@ export default function Home() {
     }
   };
 
-  // --- שאר הפונקציות נשארות זהות לחלוטין ---
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
     if (uploadedFile) {
@@ -221,24 +219,24 @@ export default function Home() {
         <div className="w-full space-y-8 pb-10">
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
-              <div className="relative w-full h-full">
+              <div className="relative w-full h-full overflow-hidden">
                 <video 
                   ref={videoRef} 
                   src={videoPreview} 
                   playsInline
                   webkit-playsinline="true"
                   muted
-                  className="w-full h-full object-contain" 
+                  className="w-full h-full object-contain pointer-events-none" 
                 />
                 
-                {/* שכבה שקופה שסופגת את הלחיצות ומונעת מהמערכת לפתוח נגן חיצוני */}
+                {/* שכבה שקופה שסופגת את הלחיצות */}
                 <div 
-                  className="absolute inset-0 z-0 bg-transparent cursor-pointer"
+                  className="absolute inset-0 z-20 bg-transparent cursor-pointer touch-none"
                   onClick={togglePlay}
                 />
 
                 <div 
-                  className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-10"
+                  className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-30"
                   style={{ bottom: `${subtitlePos}%` }}
                   onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }}
                   onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}

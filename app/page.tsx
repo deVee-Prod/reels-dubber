@@ -25,7 +25,7 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [isDubbing, setIsDubbing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [exportProgress, setExportProgress] = useState(0); // סטייט לאחוזים
+  const [exportProgress, setExportProgress] = useState(0); 
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
@@ -164,7 +164,6 @@ export default function Home() {
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
 
-    // האזנה להתקדמות הייצוא
     ffmpeg.on('progress', ({ progress }) => {
       setExportProgress(Math.round(progress * 100));
     });
@@ -229,25 +228,34 @@ export default function Home() {
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
 
       if (withSubtitles && transcription.length > 0) {
+        let fontParam = "";
         try {
-          const fontRes = await fetch('/heebo.ttf');
+          // עקיפת קאש כדי שימשוך את הקובץ המעודכן
+          const fontRes = await fetch('/heebo.ttf?v=' + Date.now());
           if (fontRes.ok) {
             const fontData = await fontRes.arrayBuffer();
             await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
-            
-            const subtitleFilters = transcription.map((item, index) => {
-              const baseSize = [28, 42, 58][index % 3] * fontScale;
-              const fontSize = Math.round(baseSize * 1.5); 
-              let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
-              safeWord = fixRTL(safeWord);
-              const startT = Math.max(0, item.start + globalOffset);
-              const endT = Math.max(0, item.end + globalOffset);
-              const yPos = `h-(h*${subtitlePos}/100)`;
-              return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
-            });
-            filterChain += `,${subtitleFilters.join(',')}`;
+            fontParam = "fontfile=heebo.ttf:";
+          } else {
+            console.warn("Font fetch failed, using fallback");
           }
-        } catch (e) { console.warn("Exporting without custom font fallback"); }
+        } catch (e) { 
+          console.warn("Network error fetching font, using fallback"); 
+        }
+
+        const subtitleFilters = transcription.map((item, index) => {
+          const baseSize = [28, 42, 58][index % 3] * fontScale;
+          const fontSize = Math.round(baseSize * 1.5); 
+          let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
+          safeWord = fixRTL(safeWord);
+          const startT = Math.max(0, item.start + globalOffset);
+          const endT = Math.max(0, item.end + globalOffset);
+          const yPos = `h-(h*${subtitlePos}/100)`;
+          return `drawtext=${fontParam}text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+        });
+        
+        // צורבים כתוביות בכל מקרה, גם אם אין פונט מותאם
+        filterChain += `,${subtitleFilters.join(',')}`;
       }
 
       await ffmpeg.exec([
@@ -300,6 +308,27 @@ export default function Home() {
     } catch (err) { console.error(err); } finally { setLoginLoading(false); }
   };
 
+  const startDragging = (e: any) => {
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const startY = clientY;
+    const startPos = subtitlePos;
+    const onMove = (moveEvent: any) => {
+      const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
+      const delta = ((startY - currentY) / (canvasRef.current?.clientHeight || 500)) * 100;
+      setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
+    };
+    const onEnd = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+  };
+
   const LabelFooter = () => (
     <footer className="w-full py-12 flex flex-col items-center space-y-4 opacity-40 mt-auto">
       <p className="text-[10px] tracking-[0.2em] font-medium text-white/60">Powered By deVee Boutique Label</p>
@@ -337,7 +366,6 @@ export default function Home() {
                 <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />
                 <canvas ref={canvasRef} className="w-full h-full object-contain" />
                 
-                {/* Export Progress Overlay */}
                 {isExporting && (
                   <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md">
                     <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden mb-4">
@@ -355,7 +383,12 @@ export default function Home() {
                   </div>
                 )}
 
-                <div className="absolute left-0 right-0 flex justify-center px-6 text-center select-none z-30" style={{ bottom: `${subtitlePos}%` }}>
+                <div 
+                  className="absolute left-0 right-0 flex justify-center px-6 text-center select-none z-30 cursor-ns-resize active:cursor-grabbing" 
+                  style={{ bottom: `${subtitlePos}%` }} 
+                  onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }} 
+                  onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
+                >
                   <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
                 </div>
               </div>
@@ -388,7 +421,7 @@ export default function Home() {
                  </div>
                </div>
                <div className="px-2">
-                 <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="w-full h-1.5 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer" />
+                 <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="w-full h-1.5 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(168,85,247,0.5)] cursor-pointer" />
                </div>
              </div>
           )}
@@ -431,7 +464,6 @@ export default function Home() {
                 {isDubbing ? 'Syncing...' : '1. DUB!'}
               </button>
               
-              {/* כפתור ה-Test המבוקש */}
               {file && transcription.length === 0 && !isDubbing && (
                 <button onClick={() => exportVideo(false)} disabled={isExporting} className="px-8 py-4 border border-white/10 rounded-full uppercase tracking-[0.4em] text-[8px] font-bold text-white/40 hover:bg-white/5 transition-all">
                   Test Export

@@ -224,17 +224,16 @@ export default function Home() {
       const inputPath = `input.${ext}`;
       const outputPath = `output.${ext}`;
 
-      // ניקוי זיכרון וטעינת קבצים
-      try { await ffmpeg.deleteFile(inputPath); } catch(e) {}
-      try { await ffmpeg.deleteFile(outputPath); } catch(e) {}
-      
+      // 1. כתיבת הקובץ המקורי לזיכרון ה-WASM
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
-      const fontRes = await fetch('https://raw.githubusercontent.com/googlefonts/heebo/main/fonts/ttf/Heebo-Black.ttf');
+      // 2. הורדה וצריבה של הפונט Heebo Black - שימוש ב-CDN יציב
+      const fontUrl = 'https://fonts.gstatic.com/s/heebo/v26/NGSpv5_7ad-LveS51KzS6A.ttf';
+      const fontRes = await fetch(fontUrl);
       const fontData = await fontRes.arrayBuffer();
-      await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
+      await ffmpeg.writeFile('heeboblack.ttf', new Uint8Array(fontData));
 
-      // בניית שרשרת פילטרים
+      // 3. בניית הכתוביות עם הפונט הנטען
       const subtitleFilters = transcription.map((item, index) => {
         const baseSize = [28, 42, 58][index % 3] * fontScale;
         const fontSize = Math.round(baseSize * 1.5); 
@@ -243,13 +242,15 @@ export default function Home() {
         const startT = Math.max(0, item.start + globalOffset);
         const endT = Math.max(0, item.end + globalOffset);
         const yPos = `h-(h*${subtitlePos}/100)`;
-        return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4`;
+        
+        // הגדרה מפורשת של ה-fontfile לנתיב המקומי בזיכרון
+        return `drawtext=fontfile=heeboblack.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
       });
 
-      // תיקון רזולוציה (Scale) + כל הכתוביות
       const filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p,${subtitleFilters.join(',')}`;
 
-      await ffmpeg.exec([
+      // 4. הרצת הפקודה
+      const ret = await ffmpeg.exec([
         '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
@@ -259,20 +260,22 @@ export default function Home() {
         outputPath
       ]);
 
+      if (ret !== 0) throw new Error("FFmpeg encoding failed");
+
       const data = await ffmpeg.readFile(outputPath);
       const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
       const downloadUrl = URL.createObjectURL(videoBlob);
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_Export.${ext}`;
+      a.download = `deVee_Export_${Date.now()}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
 
     } catch (err) {
       console.error("Export failed:", err);
-      alert("Export failed - please try uploading the file again");
+      alert("ייצוא נכשל - נסה שוב או בדוק את הקובץ");
     } finally {
       setIsExporting(false);
     }

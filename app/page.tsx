@@ -16,13 +16,13 @@ export default function Home() {
   const [transcription, setTranscription] = useState<any[]>([]); 
   const [currentTime, setCurrentTime] = useState(0); 
   const [subtitlePos, setSubtitlePos] = useState(25);
+  const [fontScale, setFontScale] = useState(1); // [חדש] שליטה על גודל פונט כללי
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
 
-  // לופ סנכרון מהיר 60FPS
   const animate = () => {
     if (videoRef.current && !videoRef.current.paused) {
       setCurrentTime(videoRef.current.currentTime);
@@ -106,17 +106,15 @@ export default function Home() {
     return transcription.find(w => time >= w.start && time <= w.end);
   };
 
-  // פונקציית הקסם של הגדלים המשתנים
+  // לוגיקת גדלים משתנים בשילוב עם הסליידר של המשתמש
   const getDynamicFontSize = () => {
-    if (!currentWord || transcription.length === 0) return 'text-3xl';
+    if (!currentWord || transcription.length === 0) return 24 * fontScale;
     const index = transcription.findIndex(w => w.start === currentWord.start);
     const cycle = index % 3; 
-    switch(cycle) {
-      case 0: return 'text-2xl'; // מה (קטן)
-      case 1: return 'text-4xl'; // קורה (בינוני)
-      case 2: return 'text-6xl'; // חברים (גדול)
-      default: return 'text-3xl';
-    }
+    
+    // מדרגות גודל בפיקסלים, מוכפלים ב-fontScale של המשתמש
+    const sizes = [28, 42, 58]; 
+    return sizes[cycle] * fontScale;
   };
 
   const startDragging = (e: React.MouseEvent) => {
@@ -219,10 +217,11 @@ export default function Home() {
                  {currentWord && (
                    <span 
                     key={`${currentWord.word}-${currentWord.start}`} 
-                    className={`text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter animate-word-pop ${getDynamicFontSize()}`} 
+                    className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter animate-word-pop" 
                     style={{ 
                       fontFamily: 'Heebo, sans-serif', 
                       display: 'inline-block',
+                      fontSize: `${getDynamicFontSize()}px`,
                       paintOrder: 'stroke fill',
                       WebkitTextStroke: '1px rgba(0,0,0,0.3)'
                     }}
@@ -239,6 +238,21 @@ export default function Home() {
               <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
             </div>
           )}
+        </div>
+
+        {/* [חדש] פאנל שליטה על גודל פונט */}
+        <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+          <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
+          <input 
+            type="range" 
+            min="0.5" 
+            max="1.5" 
+            step="0.01" 
+            value={fontScale} 
+            onChange={(e) => setFontScale(parseFloat(e.target.value))}
+            className="flex-1 accent-[#A855F7] h-1 bg-white/10 rounded-full appearance-none cursor-pointer"
+          />
+          <span className="text-[7px] uppercase tracking-[0.3em] text-[#A855F7] font-bold">{(fontScale * 100).toFixed(0)}%</span>
         </div>
 
         <div className="space-y-3">

@@ -208,11 +208,9 @@ export default function Home() {
           ? result.transcription[0].words 
           : result.transcription.flatMap((t: any) => t.words);
         setTranscription(allWords);
-      } else {
-        alert("תקלה בתמלול: לא התקבל טקסט מהשרת.");
       }
     } catch (error: any) {
-      alert(`Error in DUB: ${error.message}`);
+      alert(`Error: ${error.message}`);
     } finally {
       setIsDubbing(false);
     }
@@ -237,7 +235,6 @@ export default function Home() {
       if (withSubtitles && transcription.length > 0) {
         let fontReady = false;
         
-        // משיכה נקייה ופשוטה מתיקיית public
         try {
           const fontRes = await fetch('/heebo.ttf');
           if (fontRes.ok) {
@@ -245,13 +242,10 @@ export default function Home() {
             await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
             fontReady = true;
           }
-        } catch (e) {
-          console.warn("Could not fetch font");
-        }
+        } catch (e) { console.warn("Font load failed"); }
 
-        // הגנה מפני קריסה
         if (!fontReady) {
-          alert("שגיאה: הקובץ heebo.ttf לא נמצא. וודא שהוא בתיקיית public באותיות קטנות. הייצוא הופסק.");
+          alert("שגיאה: הקובץ heebo.ttf לא נמצא בתיקיית public. הייצוא הופסק.");
           setIsExporting(false);
           return;
         }
@@ -298,7 +292,7 @@ export default function Home() {
 
     } catch (err: any) {
       console.error("Export failed:", err);
-      alert("הייצוא נכשל: " + err.message);
+      alert("Export failed: " + err.message);
     } finally {
       setIsExporting(false);
       setExportProgress(0);

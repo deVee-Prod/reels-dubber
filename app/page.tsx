@@ -357,7 +357,7 @@ export default function Home() {
   const LabelFooter = () => (
     <footer className="w-full py-12 flex flex-col items-center space-y-4 opacity-40 mt-auto">
       <p className="text-[10px] tracking-[0.2em] font-medium text-white/60">Powered By deVee Boutique Label</p>
-      <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 relative shadow-2xl">
+      <div className="w-12 h-12 rounded-full overflow-hidden relative">
          <Image src="/label_logo.jpg" alt="deVee Label" width={48} height={48} className="object-cover scale-110" />
       </div>
     </footer>
@@ -367,7 +367,7 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8 text-center">
         <Image src="/logo.png" alt="deVee" width={100} height={32} className="mb-8" />
-        <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl w-full max-w-[340px]">
+        <form onSubmit={handleLogin} className="mt-12 space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl w-full max-w-[340px]">
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
           <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
         </form>

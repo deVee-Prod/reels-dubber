@@ -13,7 +13,7 @@ body {
   font-family: 'Heebo', sans-serif;
 }
 
-/* אנימציית כניסה מהירה וחדה */
+/* אנימציית כניסה מהירה וחדה - נשאר כפי שביקשת */
 @keyframes word-pop {
   0% {
     transform: scale(0.9);
@@ -35,4 +35,27 @@ body {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* --- תיקון לנגן במובייל (למניעת מסך מלא) --- */
+
+/* מסתיר את כפתורי המערכת של אפל שיכולים להקפיץ את הווידאו החוצה */
+video::-webkit-media-controls-fullscreen-button,
+video::-webkit-media-controls-play-button,
+video::-webkit-media-controls-start-playback-button {
+    display: none !important;
+    -webkit-appearance: none;
+}
+
+/* מונע מהאייפון להוסיף שכבת בקרה מעל הווידאו */
+video::-internal-media-controls-download-button {
+    display:none;
+}
+
+video::-webkit-media-controls-enclosure {
+    overflow:hidden !important;
+}
+
+video::-webkit-media-controls-panel {
+    width: calc(100% + 30px); /* תמרון להסתרת כפתורים במכשירים מסוימים */
 }

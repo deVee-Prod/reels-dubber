@@ -378,14 +378,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center overflow-y-auto overflow-x-hidden">
-      <main className="w-full max-w-2xl mx-auto flex flex-col items-center py-6 md:py-12 px-4 md:px-6 space-y-6 md:space-y-8 pb-32">
+      <main className="w-full max-w-2xl mx-auto flex flex-col items-center py-6 md:py-12 px-4 md:px-6 space-y-4 md:space-y-8 pb-40">
         <header className="text-center space-y-2">
           <Image src="/logo.png" alt="deVee" width={80} height={26} className="opacity-80 mx-auto" />
           <p className="text-[9px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
         </header>
 
-        <div className="w-full space-y-6 md:space-y-8">
-          <div className="relative w-full aspect-[9/16] max-h-[50vh] md:max-h-none md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
+        <div className="w-full space-y-4 md:space-y-8">
+          <div className="relative w-full aspect-[9/16] max-h-[45vh] md:max-h-[70vh] md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
                 <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />
@@ -483,7 +483,7 @@ export default function Home() {
             )}
           </div>
 
-          <div className="flex flex-col gap-3 md:gap-4 pb-20">
+          <div className="flex flex-col gap-3 md:gap-4 pb-safe pb-6">
             <div className="flex items-center gap-3">
               <button 
                 onClick={handleDub} 

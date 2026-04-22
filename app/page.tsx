@@ -164,6 +164,10 @@ export default function Home() {
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
 
+    ffmpeg.on('log', ({ message }) => {
+      console.log('[FFmpeg Log]', message); // יעזור לנו לראות שגיאות אם יהיו
+    });
+
     ffmpeg.on('progress', ({ progress }) => {
       setExportProgress(Math.round(progress * 100));
     });
@@ -228,37 +232,43 @@ export default function Home() {
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
 
       if (withSubtitles && transcription.length > 0) {
-        let fontParam = "";
         try {
-          // עקיפת קאש כדי שימשוך את הקובץ המעודכן
-          const fontRes = await fetch('/heebo.ttf?v=' + Date.now());
-          if (fontRes.ok) {
-            const fontData = await fontRes.arrayBuffer();
-            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
-            fontParam = "fontfile=heebo.ttf:";
-          } else {
-            console.warn("Font fetch failed, using fallback");
-          }
-        } catch (e) { 
-          console.warn("Network error fetching font, using fallback"); 
+          // משיכת הפונט בצורה אבסולוטית וישירה תוך עקיפת קאש
+          const fontUrl = new URL(`/heebo.ttf?v=${Date.now()}`, window.location.origin).href;
+          await ffmpeg.writeFile('heebo.ttf', await fetchFile(fontUrl));
+        } catch (fontErr) {
+          console.error("Failed to load font file", fontErr);
+          alert("שגיאה בטעינת הפונט. וודא שקובץ heebo.ttf קיים.");
+          setIsExporting(false);
+          return;
         }
 
         const subtitleFilters = transcription.map((item, index) => {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
           const fontSize = Math.round(baseSize * 1.5); 
-          let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
+          
+          // ניקוי עמוק מכל תו שיכול לרסק את FFmpeg
+          let safeWord = item.word
+            .replace(/\\/g, "\\\\") 
+            .replace(/'/g, "")
+            .replace(/:/g, "\\:")
+            .replace(/,/g, "\\,")
+            .replace(/%/g, "\\%");
+            
           safeWord = fixRTL(safeWord);
+          
           const startT = Math.max(0, item.start + globalOffset);
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
-          return `drawtext=${fontParam}text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+          
+          // FFmpeg חייב את הפונט הזה, אחרת הוא קורס
+          return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         
-        // צורבים כתוביות בכל מקרה, גם אם אין פונט מותאם
         filterChain += `,${subtitleFilters.join(',')}`;
       }
 
-      await ffmpeg.exec([
+      const ret = await ffmpeg.exec([
         '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
@@ -267,6 +277,8 @@ export default function Home() {
         '-b:a', '128k',
         outputPath
       ]);
+
+      if (ret !== 0) throw new Error("FFmpeg encoding failed during execution");
 
       const data = await ffmpeg.readFile(outputPath);
       const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
@@ -281,7 +293,7 @@ export default function Home() {
 
     } catch (err) {
       console.error("Export failed:", err);
-      alert("Export failed");
+      alert("הייצוא נכשל. פתח את הקונסול כדי לראות את השגיאה המלאה.");
     } finally {
       setIsExporting(false);
       setExportProgress(0);

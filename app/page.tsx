@@ -218,8 +218,8 @@ export default function Home() {
 
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
-      const inputPath = `input.${ext}`;
-      const outputPath = `output.${ext}`;
+      const inputPath = `input_${Date.now()}.${ext}`;
+      const outputPath = `output_${Date.now()}.${ext}`;
 
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
@@ -227,19 +227,33 @@ export default function Home() {
 
       if (withSubtitles && transcription.length > 0) {
         let fontReady = false;
+        
+        // 1. ניסיון משיכה מה-public המקומי עם שובר קאש
         try {
-          // גיבוי כפול לפונט - ניסיון מלינק ישיר
-          const fontUrl = "https://github.com/googlefonts/heebo/raw/main/fonts/ttf/Heebo-Black.ttf";
-          const fontBuffer = await fetch(fontUrl).then(res => res.arrayBuffer());
-          await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontBuffer));
-          fontReady = true;
-        } catch (e) {
-          // אם הלינק נכשל, מנסים מהתיקייה המקומית
-          try {
-            const localFont = await fetch('/heebo.ttf').then(res => res.arrayBuffer());
-            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(localFont));
+          const fontRes = await fetch(`/heebo.ttf?v=${Date.now()}`);
+          if (fontRes.ok) {
+            const fontData = await fontRes.arrayBuffer();
+            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
             fontReady = true;
-          } catch (e2) { console.error("All font loads failed"); }
+          }
+        } catch (e) { console.warn("Local font fetch failed"); }
+
+        // 2. גיבוי: משיכה מ-GitHub דרך CORS Proxy
+        if (!fontReady) {
+          try {
+            const proxyUrl = "https://corsproxy.io/?https://raw.githubusercontent.com/googlefonts/heebo/main/fonts/ttf/Heebo-Black.ttf";
+            const fontBuffer = await fetch(proxyUrl).then(res => {
+              if (!res.ok) throw new Error("Proxy failed");
+              return res.arrayBuffer();
+            });
+            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontBuffer));
+            fontReady = true;
+          } catch (e2) { console.error("All font fallbacks failed"); }
+        }
+
+        // הגנה: אם אין פונט, עוצרים כדי למנוע 0KB
+        if (!fontReady) {
+          throw new Error("לא הצלחנו לטעון את הפונט. הייצוא הופסק כדי למנוע קובץ שבור.");
         }
 
         const subtitleFilters = transcription.map((item, index) => {
@@ -251,21 +265,22 @@ export default function Home() {
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
           
-          const fontArg = fontReady ? "fontfile=heebo.ttf:" : "";
-          return `drawtext=${fontArg}text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+          return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }
 
-      await ffmpeg.exec([
+      const result = await ffmpeg.exec([
         '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
+        '-crf', '28', 
         '-c:a', 'aac',
-        '-b:a', '128k',
         outputPath
       ]);
+
+      if (result !== 0) throw new Error("Encoding failed");
 
       const data = await ffmpeg.readFile(outputPath);
       const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
@@ -278,9 +293,12 @@ export default function Home() {
       a.click();
       document.body.removeChild(a);
 
-    } catch (err) {
+      await ffmpeg.deleteFile(inputPath);
+      await ffmpeg.deleteFile(outputPath);
+
+    } catch (err: any) {
       console.error("Export failed:", err);
-      alert("Export failed");
+      alert(err.message || "Export failed");
     } finally {
       setIsExporting(false);
       setExportProgress(0);

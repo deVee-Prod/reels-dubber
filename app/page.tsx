@@ -250,22 +250,23 @@ export default function Home() {
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
 
       if (withSubtitles && transcription.length > 0) {
+        // שימוש בערך ה-Offset הכי עדכני מה-state
+        const currentOffset = globalOffset;
+
         const subtitleFilters = transcription.map((item, index) => {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
           const fontSize = Math.round(baseSize * scaleRatio); 
           
           let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
           
-          // סנכרון זמנים עם Offset מעודכן
-          const startT = Number((item.start + globalOffset).toFixed(3));
-          const endT = Number((item.end + globalOffset).toFixed(3));
+          // חישוב זמנים מדויק עם ה-Offset שנבחר ב-UI
+          const startT = Math.max(0, Number((item.start + currentOffset).toFixed(3)));
+          const endT = Math.max(0, Number((item.end + currentOffset).toFixed(3)));
           
           const yPos = `h-(h*${subtitlePos}/100)-text_h`;
-          
-          // צל עדין בלבד (בלי מסגרת שחורה גסה)
           const shadowOff = Math.max(1, Math.round(2 * scaleRatio));
 
-          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${Math.max(0, startT)},${Math.max(0, endT)})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:shadowcolor=black@0.4:shadowx=${shadowOff}:shadowy=${shadowOff}`;
+          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:shadowcolor=black@0.4:shadowx=${shadowOff}:shadowy=${shadowOff}`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }

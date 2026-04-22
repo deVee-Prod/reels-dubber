@@ -282,8 +282,8 @@ export default function Home() {
         '-vf', filterChain,
         '-c:v', 'libx264',
         '-preset', 'veryfast',
-        '-crf', '17',           // איכות מקסימלית לשמירה על המקור
-        '-c:a', 'copy',         // שומר על הסאונד המקורי בלי קידוד מחדש
+        '-crf', '17',
+        '-c:a', 'copy',
         outputPath
       ]);
 
@@ -377,15 +377,15 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center">
-      <main className="flex-1 w-full max-w-2xl flex flex-col items-center py-12 px-6 space-y-8">
+    <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center overflow-x-hidden">
+      <main className="flex-1 w-full max-w-md md:max-w-2xl flex flex-col items-center py-6 md:py-12 px-4 md:px-6 space-y-6 md:space-y-8 pb-32">
         <header className="text-center space-y-2">
-          <Image src="/logo.png" alt="deVee" width={90} height={30} className="opacity-80 mx-auto" />
-          <p className="text-[10px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
+          <Image src="/logo.png" alt="deVee" width={80} height={26} className="opacity-80 mx-auto" />
+          <p className="text-[9px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
         </header>
 
-        <div className="w-full space-y-8 pb-10">
-          <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center group">
+        <div className="w-full space-y-6 md:space-y-8">
+          <div className="relative w-full aspect-[9/16] max-h-[45vh] md:max-h-none md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
                 <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />
@@ -401,9 +401,9 @@ export default function Home() {
                 )}
 
                 {!isPlaying && !isExporting && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity">
-                    <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 shadow-2xl">
-                      <div className="w-0 h-0 border-t-[12px] border-t-transparent border-l-[22px] border-l-white border-b-[12px] border-b-transparent ml-2" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                    <div className="w-16 h-16 md:w-20 md:h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 shadow-2xl">
+                      <div className="w-0 h-0 border-t-[10px] border-t-transparent border-l-[18px] border-l-white border-b-[10px] border-b-transparent ml-2" />
                     </div>
                   </div>
                 )}
@@ -429,17 +429,17 @@ export default function Home() {
           {videoPreview && (
              <div className="flex flex-col gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 shadow-inner">
                <div className="flex items-center justify-between px-2">
-                 <button onClick={togglePlay} className="w-12 h-12 rounded-full bg-[#A855F7]/10 border border-[#A855F7]/20 flex items-center justify-center hover:bg-[#A855F7]/20 transition-all active:scale-95">
+                 <button onClick={togglePlay} className="w-10 h-10 rounded-full bg-[#A855F7]/10 border border-[#A855F7]/20 flex items-center justify-center active:scale-95">
                     {isPlaying ? (
-                      <div className="flex gap-1.5">
-                        <div className="w-1.5 h-4 bg-[#A855F7] rounded-full"></div>
-                        <div className="w-1.5 h-4 bg-[#A855F7] rounded-full"></div>
+                      <div className="flex gap-1">
+                        <div className="w-1 h-3 bg-[#A855F7] rounded-full"></div>
+                        <div className="w-1 h-3 bg-[#A855F7] rounded-full"></div>
                       </div>
                     ) : (
-                      <div className="w-0 h-0 border-t-[7px] border-t-transparent border-l-[12px] border-l-[#A855F7] border-b-[7px] border-b-transparent ml-1"></div>
+                      <div className="w-0 h-0 border-t-[6px] border-t-transparent border-l-[10px] border-l-[#A855F7] border-b-[6px] border-b-transparent ml-1"></div>
                     )}
                  </button>
-                 <div className="flex gap-2 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                 <div className="flex gap-2 text-[9px] font-mono text-white/40 uppercase tracking-widest">
                     <span className="text-white bg-white/5 px-2 py-1 rounded-md">{formatTime(currentTime)}</span>
                     <span className="py-1">/</span>
                     <span className="py-1">{formatTime(duration)}</span>
@@ -451,18 +451,17 @@ export default function Home() {
              </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
               <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7]" />
             </div>
-            {/* כפתורי ה-Position החדשים במקום ה-Sync */}
             <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Position</span>
-              <div className="flex items-center space-x-3">
-                <button onClick={() => setSubtitlePos(prev => Math.max(10, prev - 5))} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center text-xs">▼</button>
+              <div className="flex items-center space-x-4">
+                <button onClick={() => setSubtitlePos(prev => Math.max(10, prev - 5))} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs">▼</button>
                 <span className="text-[8px] font-mono text-[#A855F7]">{Math.round(subtitlePos)}%</span>
-                <button onClick={() => setSubtitlePos(prev => Math.min(90, prev + 5))} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center text-xs">▲</button>
+                <button onClick={() => setSubtitlePos(prev => Math.min(90, prev + 5))} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs">▲</button>
               </div>
             </div>
           </div>
@@ -470,12 +469,12 @@ export default function Home() {
           <div className="h-24 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 flex gap-3 items-center overflow-x-auto no-scrollbar">
             {transcription.length > 0 ? (
               transcription.map((item, i) => (
-                <div key={i} className={`h-full min-w-[110px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${currentTime >= item.start && currentTime <= item.end ? 'bg-[#A855F7]/30 border-[#A855F7]' : 'bg-white/[0.02] border-white/5'}`}>
+                <div key={i} className={`h-full min-w-[100px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${currentTime >= item.start && currentTime <= item.end ? 'bg-[#A855F7]/30 border-[#A855F7]' : 'bg-white/[0.02] border-white/5'}`}>
                   <input value={item.word} onChange={(e) => {
                      const updated = [...transcription];
                      updated[i].word = e.target.value;
                      setTranscription(updated);
-                  }} className="bg-transparent border-none outline-none text-[11px] text-white font-bold text-center w-full focus:text-[#A855F7]" />
+                  }} className="bg-transparent border-none outline-none text-[10px] text-white font-bold text-center w-full focus:text-[#A855F7]" />
                   <button onClick={() => { const updated = transcription.filter((_, idx) => idx !== i); setTranscription(updated); }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/50 rounded-full text-[8px] flex items-center justify-center hover:bg-red-500 transition-colors">✕</button>
                 </div>
               ))
@@ -484,21 +483,21 @@ export default function Home() {
             )}
           </div>
 
-          <div className="flex flex-col gap-4">
-            <div className="flex justify-center gap-4">
-              <button onClick={handleDub} disabled={!file || isDubbing} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
-                {isDubbing ? 'Syncing / Loading...' : '1. DUB!'}
+          <div className="flex flex-col gap-3 pb-12">
+            <div className="flex flex-col md:flex-row justify-center gap-3">
+              <button onClick={handleDub} disabled={!file || isDubbing} className={`w-full md:flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
+                {isDubbing ? 'Syncing...' : '1. DUB!'}
               </button>
               
               {file && transcription.length === 0 && !isDubbing && (
-                <button onClick={() => exportVideo(false)} disabled={isExporting} className="px-8 py-4 border border-white/10 rounded-full uppercase tracking-[0.4em] text-[8px] font-bold text-white/40 hover:bg-white/5 transition-all">
+                <button onClick={() => exportVideo(false)} disabled={isExporting} className="w-full md:px-8 py-4 border border-white/10 rounded-full uppercase tracking-[0.4em] text-[8px] font-bold text-white/40">
                   Test Export
                 </button>
               )}
             </div>
 
             {transcription.length > 0 && (
-              <button onClick={() => exportVideo(true)} disabled={isExporting} className={`w-full py-5 rounded-full uppercase tracking-[0.5em] text-[10px] font-black transition-all ${!isExporting ? 'bg-white text-black shadow-[0_0_40px_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-95' : 'bg-white/5 text-white/20'}`}>
+              <button onClick={() => exportVideo(true)} disabled={isExporting} className={`w-full py-5 rounded-full uppercase tracking-[0.5em] text-[10px] font-black transition-all ${!isExporting ? 'bg-white text-black shadow-[0_0_40px_rgba(255,255,255,0.2)] active:scale-95' : 'bg-white/5 text-white/20'}`}>
                 {isExporting ? `Burning ${exportProgress}%` : '2. DOWNLOAD FINAL'}
               </button>
             )}

@@ -20,9 +20,9 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
   const ffmpegRef = useRef<any>(null);
-  const requestRef = useRef<number>(null); // רפרנס ללופ הסנכרון
+  const requestRef = useRef<number>(null);
 
-  // לופ סנכרון מהיר (60fps) כדי למנוע דיליי בכתוביות
+  // לופ סנכרון מהיר 60FPS
   const animate = () => {
     if (videoRef.current && !videoRef.current.paused) {
       setCurrentTime(videoRef.current.currentTime);
@@ -84,7 +84,7 @@ export default function Home() {
       }
     } catch (error: any) {
       setIsDubbing(false);
-      alert(`Debug: ${error.message}`);
+      alert(`Error: ${error.message}`);
     }
   };
 
@@ -99,10 +99,10 @@ export default function Home() {
     setTranscription(updated);
   };
 
-  // לוגיקת סנכרון קריטית: מחפשת את המילה עם "הקדמה" קלה של 150ms
+  // סנכרון עם אופסט עדין של 0.08
   const getCurrentWord = () => {
     if (transcription.length === 0) return null;
-    const offset = 0.15; // 150 מילישניות הקדמה כדי לפצות על Latency
+    const offset = 0.08; 
     const time = currentTime + offset;
     return transcription.find(w => time >= w.start && time <= w.end);
   };
@@ -122,7 +122,15 @@ export default function Home() {
     document.addEventListener('mouseup', onMouseUp);
   };
 
-  // ... (handleLogin, handleFileUpload נשארים זהים)
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const uploadedFile = e.target.files?.[0];
+    if (uploadedFile) {
+      setFile(uploadedFile);
+      setVideoPreview(URL.createObjectURL(uploadedFile));
+      setTranscription([]); 
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
@@ -147,52 +155,38 @@ export default function Home() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFile = e.target.files?.[0];
-    if (uploadedFile) {
-      setFile(uploadedFile);
-      setVideoPreview(URL.createObjectURL(uploadedFile));
-      setTranscription([]); 
-    }
-  };
-
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-between p-8">
-        <div />
-        <div className="w-full max-w-[340px] flex flex-col items-center space-y-10">
-          <div className="flex flex-col items-center space-y-4">
-            <Image src="/logo.png" alt="deVee" width={100} height={32} />
-            <h2 className="text-[9px] tracking-[0.5em] uppercase text-[#A855F7]/80 font-bold italic">Private Studio Access</h2>
+      <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8">
+        <div className="w-full max-w-[340px] space-y-8">
+          <div className="text-center space-y-2">
+            <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
+            <h2 className="text-[9px] tracking-[0.5em] uppercase text-[#A855F7]/80 font-bold italic">Private Access</h2>
           </div>
-          <div className="w-full bg-[#0c0c0c]/40 border border-white/[0.04] rounded-[24px] p-8 backdrop-blur-xl">
-            <form onSubmit={handleLogin} className="flex flex-col space-y-4">
-              <input 
-                type="password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={`w-full bg-white/[0.02] border ${loginError ? 'border-red-500/30' : 'border-white/5'} rounded-xl py-3 px-4 text-white focus:outline-none focus:border-[#A855F7]/30 transition-all text-center tracking-[0.4em] text-[11px]`}
-                placeholder="ACCESS KEY"
-              />
-              <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">
-                {loginLoading ? 'Verifying...' : 'Enter Studio'}
-              </button>
-            </form>
-          </div>
+          <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl">
+            <input 
+              type="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={`w-full bg-white/[0.02] border ${loginError ? 'border-red-500/30' : 'border-white/5'} rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none`}
+              placeholder="ACCESS KEY"
+            />
+            <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">
+              {loginLoading ? 'Verifying...' : 'Enter'}
+            </button>
+          </form>
         </div>
-        <footer className="flex flex-col items-center space-y-3 pb-4">
-          <span className="text-[9px] tracking-[0.1em] text-white/40 font-light">Powered By deVee Boutique Label</span>
-          <Image src="/label_logo.jpg" alt="deVee Label" width={32} height={32} className="rounded-full opacity-60" />
-        </footer>
       </main>
     );
   }
 
+  const currentWord = getCurrentWord();
+
   return (
-    <main className="min-h-screen bg-[#050505] text-white font-sans flex flex-col items-center py-12 px-6">
-      <header className="w-full max-w-2xl flex flex-col items-center mb-16 space-y-2">
+    <main className="min-h-screen bg-[#050505] text-white flex flex-col items-center py-12 px-6">
+      <header className="mb-16 text-center space-y-2">
         <Image src="/logo.png" alt="deVee" width={90} height={30} className="opacity-80" />
-        <span className="text-[10px] tracking-[0.3em] text-white/40 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] uppercase">REELS DUBBER</span>
+        <p className="text-[10px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
       </header>
 
       <div className="w-full max-w-2xl space-y-8">
@@ -204,28 +198,27 @@ export default function Home() {
                 src={videoPreview} 
                 controls 
                 className="w-full h-full object-contain"
-                // ה-onTimeUpdate נשאר כגיבוי, אבל animate() עושה את העבודה הקשה
-                onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
               />
+              {/* מכולת כתוביות עם גרירה ואנימציית קפיצה */}
               <div 
-                className="absolute left-0 right-0 flex justify-center pointer-events-auto cursor-ns-resize active:cursor-grabbing px-6 text-center"
+                className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none"
                 style={{ bottom: `${subtitlePos}%` }}
                 onMouseDown={startDragging}
               >
-                 {getCurrentWord() && (
+                 {currentWord && (
                    <span 
-                    key={getCurrentWord().word}
-                    className="text-white text-3xl font-black drop-shadow-[0_4px_10px_rgba(0,0,0,1)] uppercase tracking-tight animate-in zoom-in duration-100" 
-                    style={{ fontFamily: 'Heebo, sans-serif' }}
+                    key={`${currentWord.word}-${currentWord.start}`} 
+                    className="text-white text-3xl font-black drop-shadow-[0_4px_12px_rgba(0,0,0,1)] uppercase tracking-tight animate-subtitle-jump" 
+                    style={{ fontFamily: 'Heebo, sans-serif', display: 'inline-block' }}
                    >
-                     {getCurrentWord().word}
+                     {currentWord.word}
                    </span>
                  )}
               </div>
             </div>
           ) : (
-            <div onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center space-y-4 cursor-pointer group">
-              <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center text-white/10 group-hover:text-[#A855F7] transition-colors text-lg">+</div>
+            <div onClick={() => fileInputRef.current?.click()} className="cursor-pointer text-center space-y-4">
+              <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mx-auto text-white/20 text-xl">+</div>
               <p className="text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold">Upload Media</p>
               <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
             </div>
@@ -233,49 +226,42 @@ export default function Home() {
         </div>
 
         {/* Timeline */}
-        <div className="w-full space-y-3">
-          <div className="flex justify-between items-center px-2">
-            <span className="text-[7px] uppercase tracking-[0.3em] text-white/20 font-bold">Monitor</span>
-            <span className="text-[7px] uppercase tracking-[0.3em] text-[#A855F7] font-black">Timeline</span>
+        <div className="space-y-3">
+          <div className="flex justify-between px-2 text-[7px] uppercase tracking-[0.3em] font-bold">
+            <span className="text-white/20">Monitor</span>
+            <span className="text-[#A855F7]">Timeline</span>
           </div>
-          <div className="h-20 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-2 flex gap-2 items-center overflow-x-auto no-scrollbar">
-            {transcription.length > 0 ? (
-              transcription.map((item, i) => (
-                <div 
-                  key={i} 
-                  className={`h-full min-w-[100px] border rounded-lg flex flex-col items-center justify-center p-2 relative transition-all duration-200 ${
-                    currentTime >= item.start && currentTime <= item.end 
-                    ? 'bg-[#A855F7]/30 border-[#A855F7]' 
-                    : 'bg-[#A855F7]/5 border-[#A855F7]/10'
-                  }`}
-                >
-                  <input 
-                    value={item.word}
-                    onChange={(e) => handleWordEdit(i, e.target.value)}
-                    className="bg-transparent border-none outline-none text-[10px] text-white font-bold text-center w-full focus:text-[#A855F7]"
-                  />
-                  <button onClick={() => handleWordDelete(i)} className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500/50 hover:bg-red-500 rounded-full text-[7px] flex items-center justify-center transition-colors">✕</button>
-                  <span className="text-[6px] text-white/20 absolute bottom-1">{item.start.toFixed(1)}s</span>
-                </div>
-              ))
-            ) : (
-              <div className="w-full text-center text-[7px] uppercase tracking-[0.4em] text-white/5">
-                {isDubbing ? 'Generating Neural Timeline...' : 'Waiting for source...'}
+          <div className="h-24 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 flex gap-3 items-center overflow-x-auto no-scrollbar">
+            {transcription.map((item, i) => (
+              <div 
+                key={i} 
+                className={`h-full min-w-[110px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${
+                  currentTime >= item.start && currentTime <= item.end 
+                  ? 'bg-[#A855F7]/30 border-[#A855F7]' 
+                  : 'bg-white/[0.02] border-white/5'
+                }`}
+              >
+                <input 
+                  value={item.word}
+                  onChange={(e) => handleWordEdit(i, e.target.value)}
+                  className="bg-transparent border-none outline-none text-[11px] text-white font-bold text-center w-full"
+                />
+                <button onClick={() => handleWordDelete(i)} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/50 rounded-full text-[8px] flex items-center justify-center">✕</button>
+                <span className="text-[7px] text-white/20 mt-1">{item.start.toFixed(1)}s</span>
               </div>
-            )}
+            ))}
           </div>
         </div>
 
-        {/* DUB Button */}
-        <div className="flex flex-col items-center space-y-6 pt-4">
+        <div className="flex justify-center pt-4">
           <button 
             onClick={handleDub}
             disabled={!file || isDubbing || !ffmpegLoaded}
-            className={`px-14 py-3.5 rounded-full uppercase tracking-[0.4em] text-[8px] font-black transition-all ${
-              file && !isDubbing && ffmpegLoaded ? 'bg-[#A855F7] text-white shadow-[0_0_40px_rgba(168,85,247,0.25)] hover:scale-105' : 'bg-white/[0.02] text-white/10 border border-white/5'
+            className={`px-16 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${
+              file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_40px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'
             }`}
           >
-            {!ffmpegLoaded ? 'Loading Engine...' : isDubbing ? 'Syncing...' : 'DUB!'}
+            {isDubbing ? 'Syncing...' : 'DUB!'}
           </button>
         </div>
       </div>

@@ -17,6 +17,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0); 
   const [subtitlePos, setSubtitlePos] = useState(25);
   const [fontScale, setFontScale] = useState(1);
+  const [globalOffset, setGlobalOffset] = useState(0); // [חדש] כיוונון סנכרון ידני
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
@@ -25,21 +26,19 @@ export default function Home() {
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
 
-  // סנכרון בזמן אמת - ללא אנימציות לעיבוד מקסימלי
   const syncSubtitles = () => {
     if (videoRef.current && subtitleRef.current && transcription.length > 0) {
-      const time = videoRef.current.currentTime;
-      setCurrentTime(time);
+      // הוספת ה-Offset הגלובלי לזמן הנוכחי
+      const time = videoRef.current.currentTime + globalOffset;
+      setCurrentTime(videoRef.current.currentTime);
 
       const wordObj = transcription.find(w => time >= w.start && time <= w.end);
       
       if (wordObj) {
         if (lastWordRef.current !== wordObj.word + wordObj.start) {
-          // עדכון טקסט מיידי ב-DOM
           subtitleRef.current.innerText = wordObj.word;
           subtitleRef.current.style.display = "inline-block";
           
-          // גודל משתנה
           const index = transcription.findIndex(w => w.start === wordObj.start);
           const sizes = [28, 42, 58];
           const dynamicSize = sizes[index % 3] * fontScale;
@@ -60,8 +59,14 @@ export default function Home() {
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [transcription, fontScale]);
+  }, [transcription, fontScale, globalOffset]);
 
+  // פונקציות עזר לסנכרון
+  const adjustOffset = (amount: number) => {
+    setGlobalOffset(prev => prev + amount);
+  };
+
+  // ... (handleDub, handleFileUpload, handleLogin נשארים זהים)
   const loadFFmpeg = async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
     const { toBlobURL } = await import('@ffmpeg/util');
@@ -199,7 +204,6 @@ export default function Home() {
                 style={{ bottom: `${subtitlePos}%` }}
                 onMouseDown={startDragging}
               >
-                {/* כאן הטקסט מופיע ב-Cut חד ללא שום אנימציה לסנכרון מושלם */}
                 <span 
                   ref={subtitleRef}
                   className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter" 
@@ -221,11 +225,23 @@ export default function Home() {
           )}
         </div>
 
-        {/* Size Slider */}
-        <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-          <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
-          <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7] h-1 bg-white/10 rounded-full appearance-none cursor-pointer" />
-          <span className="text-[7px] uppercase tracking-[0.3em] text-[#A855F7] font-bold">{(fontScale * 100).toFixed(0)}%</span>
+        {/* פאנל שליטה משולב: Size + Sync */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* Size Slider */}
+          <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
+            <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7] h-1 bg-white/10 rounded-full appearance-none cursor-pointer" />
+          </div>
+
+          {/* Sync Offset Control */}
+          <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Sync</span>
+            <div className="flex items-center space-x-3">
+              <button onClick={() => adjustOffset(-0.05)} className="w-6 h-6 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-[10px] text-white/40">-</button>
+              <span className="text-[8px] font-mono text-[#A855F7] w-12 text-center">{globalOffset > 0 ? '+' : ''}{globalOffset.toFixed(2)}s</span>
+              <button onClick={() => adjustOffset(0.05)} className="w-6 h-6 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-[10px] text-white/40">+</button>
+            </div>
+          </div>
         </div>
 
         {/* Timeline */}

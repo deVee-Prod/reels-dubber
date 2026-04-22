@@ -11,19 +11,20 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-    // וודא שהמודל הוא gemini-1.5-flash או gemini-2.5-flash-exp (תלוי מה זמין לך ב-API Key)
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // חזרה ל-2.5 Flash כמו שביקשת!
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const arrayBuffer = await file.arrayBuffer();
     const base64Audio = Buffer.from(arrayBuffer).toString('base64');
 
     const prompt = `
-      תמלל את האודיו המצורף מילה במילה בצורה קיצונית.
-      הנחיות חשובות:
-      1. החזר JSON בלבד.
-      2. לכל מילה (word) חייב להיות זמן התחלה (start) וזמן סיום (end) מדויקים בשניות.
-      3. התמקד ברגע ה-Attack (הצליל הראשון) של כל מילה. אל תעגל זמנים.
-      4. אם יש מוזיקה ברקע, התעלם ממנה והתמקד רק בקול האנושי.
+      תמלל את האודיו המצורף מילה במילה.
+      החזר JSON בלבד במבנה הבא:
+      [
+        {"word": "מילה", "start": 0.1, "end": 0.5},
+        ...
+      ]
+      חשוב: דייק מאוד בזמני ההתחלה (start). אל תוסיף הסברים או טקסט נוסף.
     `;
 
     const result = await model.generateContent([
@@ -37,12 +38,16 @@ export async function POST(req: Request) {
     ]);
 
     const responseText = result.response.text();
-    const cleanJson = responseText.replace(/```json|```/g, "").trim();
-    const transcriptionData = JSON.parse(cleanJson);
+    
+    // שליפת ה-JSON מתוך התשובה (מטפל במקרים שהמודל מוסיף ```json)
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+        throw new Error("Could not find JSON in response");
+    }
+    
+    const transcriptionData = JSON.parse(jsonMatch[0]);
 
-    // לוגיקת הדיוק הסופית:
-    // 1. הקדמה של 200 מילישניות (ה-Sweet Spot למוזיקה)
-    // 2. קיצור משך המילה ב-10% כדי למנוע "מריחה"
+    // האסטרטגיה לדיוק: 200 מילישניות הקדמה (lookahead)
     const lookahead = 0.20; 
 
     const formattedTranscription = [{
@@ -50,14 +55,10 @@ export async function POST(req: Request) {
       words: transcriptionData.map((w: any) => {
         const start = Math.max(0, Number(w.start) - lookahead);
         const end = Number(w.end);
-        // מוודאים שהמילה לא נעלמת מהר מדי אבל גם לא נמרחת
-        const duration = end - start;
-        const safeEnd = start + (duration * 0.9); 
-
         return {
           word: w.word,
           start: Number(start.toFixed(3)),
-          end: Number(safeEnd.toFixed(3))
+          end: Number(end.toFixed(3))
         };
       })
     }];

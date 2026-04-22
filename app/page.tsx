@@ -164,17 +164,38 @@ export default function Home() {
     }
   };
 
+  // רכיב הפוטר המשותף
+  const LabelFooter = () => (
+    <footer className="w-full py-12 flex flex-col items-center space-y-4 opacity-40 mt-auto">
+      <p className="text-[10px] tracking-[0.2em] font-medium text-white/60">Powered By deVee Boutique Label</p>
+      <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 relative shadow-2xl">
+         <Image src="/label_logo.jpg" alt="deVee Label" fill className="object-cover scale-110" />
+      </div>
+    </footer>
+  );
+
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8">
-        <div className="w-full max-w-[340px] space-y-8 text-center">
-          <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
-          <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl">
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
-            <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
-          </form>
-        </div>
-      </main>
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center">
+        <main className="flex-1 flex flex-col items-center justify-center p-8 w-full">
+          <div className="w-full max-w-[340px] space-y-8">
+            <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
+            <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl">
+              <input 
+                type="password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" 
+                placeholder="ACCESS KEY" 
+              />
+              <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">
+                {loginLoading ? 'Verifying...' : 'Enter'}
+              </button>
+            </form>
+          </div>
+        </main>
+        <LabelFooter />
+      </div>
     );
   }
 
@@ -217,6 +238,7 @@ export default function Home() {
             )}
           </div>
 
+          {/* Sync & Size Controls */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
@@ -232,6 +254,7 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Timeline */}
           <div className="h-24 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 flex gap-3 items-center overflow-x-auto no-scrollbar">
             {transcription.map((item, i) => (
               <div key={i} className={`h-full min-w-[110px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${currentTime >= item.start && currentTime <= item.end ? 'bg-[#A855F7]/30 border-[#A855F7]' : 'bg-white/[0.02] border-white/5'}`}>
@@ -241,6 +264,7 @@ export default function Home() {
             ))}
           </div>
 
+          {/* DUB Button */}
           <div className="flex justify-center pt-4">
             <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`px-16 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_40px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}>
               {isDubbing ? 'Syncing...' : 'DUB!'}
@@ -249,13 +273,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Footer המקורי - Powered By deVee */}
-      <footer className="w-full py-12 flex flex-col items-center space-y-4 opacity-40">
-        <p className="text-[10px] tracking-[0.2em] font-medium text-white/60">Powered By deVee Boutique Label</p>
-        <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 relative shadow-2xl">
-           <Image src="/label-logo.png" alt="deVee Label" fill className="object-cover scale-110" />
-        </div>
-      </footer>
+      <LabelFooter />
     </div>
   );
 }

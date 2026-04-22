@@ -26,6 +26,19 @@ export default function Home() {
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
 
+  // שינוי 4: useEffect לחסימה אקטיבית של Fullscreen ב-iOS
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const block = (e: Event) => { e.preventDefault(); };
+    video.addEventListener('webkitbeginfullscreen', block);
+    video.addEventListener('webkitendfullscreen', block);
+    return () => {
+      video.removeEventListener('webkitbeginfullscreen', block);
+      video.removeEventListener('webkitendfullscreen', block);
+    };
+  }, [videoPreview]);
+
   const syncSubtitles = () => {
     if (videoRef.current && subtitleRef.current && transcription.length > 0) {
       const time = videoRef.current.currentTime + globalOffset;
@@ -56,19 +69,6 @@ export default function Home() {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
   }, [transcription, fontScale, globalOffset]);
-
-  // --- תיקון iOS: חסימת fullscreen אקטיבית ---
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const block = (e: Event) => { e.preventDefault(); };
-    video.addEventListener('webkitbeginfullscreen', block);
-    video.addEventListener('webkitendfullscreen', block);
-    return () => {
-      video.removeEventListener('webkitbeginfullscreen', block);
-      video.removeEventListener('webkitendfullscreen', block);
-    };
-  }, [videoPreview]);
 
   const adjustOffset = (amount: number) => {
     setGlobalOffset(prev => prev + amount);
@@ -153,7 +153,7 @@ export default function Home() {
     document.addEventListener('touchend', onEnd);
   };
 
-  // --- תיקון iOS: play/pause עם catch למניעת WebKit fallback ---
+  // שינוי 3: פונקציית togglePlay משופרת עם טיפול בשגיאות
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -226,38 +226,34 @@ export default function Home() {
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full">
-
-                {/* --- וידאו עם כל התיקונים ל-iOS --- */}
+                {/* שינוי 1: וידאו עם הגדרות אבטחה מקסימליות ל-WebKit */}
                 <video 
                   ref={videoRef} 
-                  src={videoPreview}
+                  src={videoPreview} 
                   playsInline
                   webkit-playsinline="true"
                   x-webkit-airplay="deny"
                   disablePictureInPicture
                   controlsList="nodownload nofullscreen noremoteplayback"
                   muted
-                  className="w-full h-full object-contain pointer-events-none"
+                  className="w-full h-full object-contain pointer-events-none" 
                 />
-
-                {/* --- כפתור Play/Pause שקוף במקום onClick על ה-div ---
-                    iOS מכבד button events ולא פותח את נגן המערכת */}
+                
+                {/* שינוי 2: כפתור Play שקוף במקום onClick על ה-div */}
                 <button
                   onClick={togglePlay}
                   className="absolute inset-0 w-full h-full z-0 bg-transparent"
                   aria-label="Play/Pause"
                 />
 
-                {/* --- שכבת כתוביות — לא השתנה דבר --- */}
                 <div 
-                  className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none"
+                  className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-10"
                   style={{ bottom: `${subtitlePos}%` }}
                   onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }}
                   onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
                 >
                   <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
                 </div>
-
               </div>
             ) : (
               <div onClick={() => fileInputRef.current?.click()} className="h-full w-full flex flex-col items-center justify-center cursor-pointer space-y-4">
@@ -268,7 +264,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* Sync & Size Controls */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
@@ -284,7 +279,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Timeline */}
           <div className="h-24 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 flex gap-3 items-center overflow-x-auto no-scrollbar">
             {transcription.map((item, i) => (
               <div key={i} className={`h-full min-w-[110px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${currentTime >= item.start && currentTime <= item.end ? 'bg-[#A855F7]/30 border-[#A855F7]' : 'bg-white/[0.02] border-white/5'}`}>

@@ -7,12 +7,12 @@ const nextConfig: NextConfig = {
         source: '/(.*)',
         headers: [
           {
-            key: 'Cross-Origin-Embedder-Policy',
-            value: 'credentialless',
+            key: 'Accept-Ranges',
+            value: 'bytes',
           },
           {
-            key: 'Cross-Origin-Opener-Policy',
-            value: 'same-origin',
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
           },
         ],
       },

@@ -167,10 +167,10 @@ export default function Home() {
 
     if (video.paused) {
       video.play().catch(() => {});
-      audio.play().catch(() => {});
+      // audio.play().catch(() => {}); ← תגרום לזה להיות הערה זמנית
     } else {
       video.pause();
-      audio.pause();
+      // audio.pause(); ← גם זה
     }
   };
 

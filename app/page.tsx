@@ -66,7 +66,6 @@ export default function Home() {
          }
       }
 
-      // התיקון לסרגל הזמן - בודק ישירות מול האודיו ולא מול ה-State
       if (!audio.paused && !audio.ended) {
         setCurrentTime(audio.currentTime);
       }
@@ -105,7 +104,7 @@ export default function Home() {
       if (videoPreview) URL.revokeObjectURL(videoPreview);
       setFile(uploadedFile);
       const buffer = await uploadedFile.arrayBuffer();
-      const blob = new Blob([buffer], { type: uploadedFile.type || 'video/mp4' }); 
+      const blob = new Blob([buffer], { type: uploadedFile.type }); 
       const url = URL.createObjectURL(blob);
       setVideoPreview(url);
       setTranscription([]); 
@@ -171,11 +170,6 @@ export default function Home() {
     const { toBlobURL } = await import('@ffmpeg/util');
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
-    
-    ffmpeg.on('log', ({ message }) => {
-      console.log('FFmpeg:', message);
-    });
-
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
@@ -196,13 +190,10 @@ export default function Home() {
     setIsDubbing(true);
     const ffmpeg = ffmpegRef.current;
     const { fetchFile } = await import('@ffmpeg/util');
-    
-    const ext = file.name.toLowerCase().endsWith('.mov') ? 'mov' : 'mp4';
-    const inputName = `input.${ext}`;
-
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
     try {
-      await ffmpeg.writeFile(inputName, await fetchFile(file));
-      await ffmpeg.exec(['-i', inputName, '-vn', '-ab', '128k', 'output_audio.mp3']);
+      await ffmpeg.writeFile(`temp_input.${ext}`, await fetchFile(file));
+      await ffmpeg.exec(['-i', `temp_input.${ext}`, '-vn', '-ab', '128k', 'output_audio.mp3']);
       const data = await ffmpeg.readFile('output_audio.mp3');
       const audioBlob = new Blob([data as any], { type: 'audio/mp3' });
       const formData = new FormData();
@@ -229,67 +220,59 @@ export default function Home() {
     const { fetchFile } = await import('@ffmpeg/util');
 
     try {
-      // זיהוי הפורמט של הקובץ שהועלה (MOV או MP4)
-      const ext = file.name.toLowerCase().endsWith('.mov') ? 'mov' : 'mp4';
-      const mimeType = ext === 'mov' ? 'video/quicktime' : 'video/mp4';
-      const inputName = `input.${ext}`;
-      const outputName = `output_final.${ext}`;
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
+      const inputPath = `input.${ext}`;
+      const outputPath = `output.${ext}`;
 
-      await ffmpeg.writeFile(inputName, await fetchFile(file));
+      // ניקוי זיכרון וטעינת קבצים
+      try { await ffmpeg.deleteFile(inputPath); } catch(e) {}
+      try { await ffmpeg.deleteFile(outputPath); } catch(e) {}
+      
+      await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
       const fontRes = await fetch('https://raw.githubusercontent.com/googlefonts/heebo/main/fonts/ttf/Heebo-Black.ttf');
       const fontData = await fontRes.arrayBuffer();
-      await ffmpeg.writeFile('/font.ttf', new Uint8Array(fontData));
+      await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
 
-      const filters = transcription.map((item, index) => {
+      // בניית שרשרת פילטרים
+      const subtitleFilters = transcription.map((item, index) => {
         const baseSize = [28, 42, 58][index % 3] * fontScale;
         const fontSize = Math.round(baseSize * 1.5); 
-        
-        // ניקוי עמוק של תווים ששוברים את FFmpeg
-        let safeWord = item.word.replace(/['"]/g, '\u2019').replace(/:/g, '\\:').replace(/,/g, '\\,');
+        let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
         safeWord = fixRTL(safeWord);
-
         const startT = Math.max(0, item.start + globalOffset);
         const endT = Math.max(0, item.end + globalOffset);
         const yPos = `h-(h*${subtitlePos}/100)`;
-
-        return `drawtext=fontfile=/font.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black:shadowx=2:shadowy=2`;
+        return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4`;
       });
 
-      // הוספת scale קריטי למניעת קריסה ברזולוציות אי-זוגיות מהטלפון
-      const scaleFilter = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p";
-      const filterGraph = `${scaleFilter},${filters.join(',')}`;
+      // תיקון רזולוציה (Scale) + כל הכתוביות
+      const filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p,${subtitleFilters.join(',')}`;
 
-      const ret = await ffmpeg.exec([
-        '-i', inputName,
-        '-vf', filterGraph,
+      await ffmpeg.exec([
+        '-i', inputPath,
+        '-vf', filterChain,
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
-        '-c:a', 'aac', 
+        '-c:a', 'aac',
         '-b:a', '128k',
-        outputName
+        outputPath
       ]);
 
-      if (ret !== 0) throw new Error("FFmpeg encoding failed");
-
-      const data = await ffmpeg.readFile(outputName);
-      if (data.byteLength === 0) throw new Error("Exported file is 0 bytes");
-
-      const videoBlob = new Blob([data.buffer as ArrayBuffer], { type: mimeType });
+      const data = await ffmpeg.readFile(outputPath);
+      const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
       const downloadUrl = URL.createObjectURL(videoBlob);
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_Reels_Dubber.${ext}`;
+      a.download = `deVee_Export.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
 
-      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
-
     } catch (err) {
       console.error("Export failed:", err);
-      alert("שגיאה בייצוא הווידאו נסה להעלות את הקובץ מחדש");
+      alert("Export failed - please try uploading the file again");
     } finally {
       setIsExporting(false);
     }
@@ -370,16 +353,8 @@ export default function Home() {
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center group">
             {videoPreview ? (
               <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
-                <audio 
-                  ref={audioRef} 
-                  src={videoPreview} 
-                  preload="auto" 
-                  className="hidden" 
-                  playsInline 
-                  onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} 
-                />
+                <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />
                 <canvas ref={canvasRef} className="w-full h-full object-contain" />
-                
                 {!isPlaying && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity">
                     <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20">
@@ -387,13 +362,7 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-
-                <div 
-                  className="absolute left-0 right-0 flex justify-center px-6 text-center select-none z-30"
-                  style={{ bottom: `${subtitlePos}%` }}
-                  onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }}
-                  onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
-                >
+                <div className="absolute left-0 right-0 flex justify-center px-6 text-center select-none z-30" style={{ bottom: `${subtitlePos}%` }} onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }} onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}>
                   <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
                 </div>
               </div>
@@ -409,15 +378,7 @@ export default function Home() {
           {videoPreview && (
              <div className="flex items-center gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4">
                <span className="text-[10px] font-mono text-white/50 w-8 text-right">{formatTime(currentTime)}</span>
-               <input 
-                 type="range" 
-                 min="0" 
-                 max={duration || 100} 
-                 step="0.01" 
-                 value={currentTime} 
-                 onChange={handleSeek} 
-                 className="flex-1 h-1 bg-white/10 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer"
-               />
+               <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="flex-1 h-1 bg-white/10 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer" />
                <span className="text-[10px] font-mono text-white/50 w-8">{formatTime(duration)}</span>
              </div>
           )}
@@ -445,34 +406,17 @@ export default function Home() {
                    updated[i].word = e.target.value;
                    setTranscription(updated);
                 }} className="bg-transparent border-none outline-none text-[11px] text-white font-bold text-center w-full focus:text-[#A855F7]" />
-                <button 
-                  onClick={() => {
-                    const updated = transcription.filter((_, idx) => idx !== i);
-                    setTranscription(updated);
-                  }}
-                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/50 rounded-full text-[8px] flex items-center justify-center hover:bg-red-500 transition-colors"
-                >
-                  ✕
-                </button>
+                <button onClick={() => { const updated = transcription.filter((_, idx) => idx !== i); setTranscription(updated); }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/50 rounded-full text-[8px] flex items-center justify-center hover:bg-red-500 transition-colors">✕</button>
               </div>
             ))}
           </div>
 
           <div className="flex justify-center gap-4 pt-4">
-            <button 
-              onClick={handleDub} 
-              disabled={!file || isDubbing || !ffmpegLoaded} 
-              className={`px-12 py-4 rounded-full uppercase tracking-[0.3em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}
-            >
+            <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`px-12 py-4 rounded-full uppercase tracking-[0.3em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}>
               {isDubbing ? 'Syncing...' : '1. DUB!'}
             </button>
-
             {transcription.length > 0 && (
-              <button 
-                onClick={exportVideo} 
-                disabled={isExporting} 
-                className={`px-12 py-4 rounded-full uppercase tracking-[0.3em] text-[9px] font-black transition-all ${!isExporting ? 'bg-white text-black shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}
-              >
+              <button onClick={exportVideo} disabled={isExporting} className={`px-12 py-4 rounded-full uppercase tracking-[0.3em] text-[9px] font-black transition-all ${!isExporting ? 'bg-white text-black shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}>
                 {isExporting ? 'Burning...' : '2. DOWNLOAD'}
               </button>
             )}

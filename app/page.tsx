@@ -159,19 +159,26 @@ export default function Home() {
   };
 
   const loadFFmpeg = async () => {
-    const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-    const { toBlobURL } = await import('@ffmpeg/util');
-    const ffmpeg = new FFmpeg();
-    ffmpegRef.current = ffmpeg;
-    ffmpeg.on('progress', ({ progress }) => {
-      setExportProgress(Math.round(progress * 100));
-    });
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-    setFfmpegLoaded(true);
+    try {
+      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+      const { toBlobURL } = await import('@ffmpeg/util');
+      const ffmpeg = new FFmpeg();
+      ffmpegRef.current = ffmpeg;
+      
+      ffmpeg.on('progress', ({ progress }) => {
+        setExportProgress(Math.round(progress * 100));
+      });
+
+      // שימוש ב-UMD בלבד ללא ESM כדי למנוע חסימות COEP
+      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      });
+      setFfmpegLoaded(true);
+    } catch (err) {
+      console.error("FFmpeg Load Error:", err);
+    }
   };
 
   useEffect(() => {
@@ -227,26 +234,16 @@ export default function Home() {
 
       if (withSubtitles && transcription.length > 0) {
         let fontReady = false;
-        
-        // 1. ניסיון משיכה מה-public המקומי עם שובר קאש
         try {
-          const fontRes = await fetch(`/heebo.ttf?v=${Date.now()}`);
+          // שימוש בלינק גלובלי של jsDelivr (הכי בטוח ל-CORS)
+          const fontUrl = "https://cdn.jsdelivr.net/gh/googlefonts/heebo@main/fonts/ttf/Heebo-Black.ttf";
+          const fontRes = await fetch(fontUrl);
           if (fontRes.ok) {
             const fontData = await fontRes.arrayBuffer();
             await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
             fontReady = true;
           }
-        } catch (e) { console.warn("Local font fetch failed"); }
-
-        // 2. גיבוי: משיכה מ-Google Fonts (יציב מאוד) דרך jsDelivr שמעולם לא חוסם CORS
-        if (!fontReady) {
-          try {
-            const fontUrl = "https://fonts.gstatic.com/s/heebo/v26/NGSpv5_7ad-LveS51KzS6A.ttf";
-            const fontBuffer = await fetch(fontUrl).then(res => res.arrayBuffer());
-            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontBuffer));
-            fontReady = true;
-          } catch (e2) { console.error("All font fallbacks failed"); }
-        }
+        } catch (e) { console.warn("Font fetch failed"); }
 
         const subtitleFilters = transcription.map((item, index) => {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
@@ -470,8 +467,8 @@ export default function Home() {
 
           <div className="flex flex-col gap-4">
             <div className="flex justify-center gap-4">
-              <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
-                {isDubbing ? 'Syncing...' : '1. DUB!'}
+              <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing && ffmpegLoaded ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
+                {isDubbing ? 'Syncing...' : (ffmpegLoaded ? '1. DUB!' : 'Loading Engine...')}
               </button>
               
               {file && transcription.length === 0 && !isDubbing && (

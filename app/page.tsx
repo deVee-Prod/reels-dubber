@@ -21,21 +21,35 @@ export default function Home() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
+  const canvasRef = useRef<HTMLCanvasElement>(null); // קנבס להצגת הוידאו
   const subtitleRef = useRef<HTMLSpanElement>(null); 
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
 
+  // לוגיקת הציור לקנבס - עוקף את הנגן של iOS
+  const renderFrame = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+
+      if (ctx && !video.paused && !video.ended) {
+        // התאמת גודל הקנבס לוידאו בפריים הראשון
+        if (canvas.width !== video.videoWidth) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+    }
+    requestAnimationFrame(renderFrame);
+  };
+
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const block = (e: Event) => { e.preventDefault(); };
-    video.addEventListener('webkitbeginfullscreen', block);
-    video.addEventListener('webkitendfullscreen', block);
-    return () => {
-      video.removeEventListener('webkitbeginfullscreen', block);
-      video.removeEventListener('webkitendfullscreen', block);
-    };
+    if (videoPreview) {
+      requestAnimationFrame(renderFrame);
+    }
   }, [videoPreview]);
 
   const syncSubtitles = () => {
@@ -137,7 +151,7 @@ export default function Home() {
     const startPos = subtitlePos;
     const onMove = (moveEvent: any) => {
       const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
-      const delta = ((startY - currentY) / (videoRef.current?.clientHeight || 500)) * 100;
+      const delta = ((startY - currentY) / (canvasRef.current?.clientHeight || 500)) * 100;
       setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
     };
     const onEnd = () => {
@@ -199,9 +213,9 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col items-center">
         <main className="flex-1 flex flex-col items-center justify-center p-8 w-full">
-          <div className="w-full max-w-[340px] space-y-8">
+          <div className="w-full max-w-[340px] space-y-8 text-center">
             <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
-            <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl">
+            <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl text-center">
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
               <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
             </form>
@@ -224,24 +238,20 @@ export default function Home() {
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full">
+                {/* הוידאו מוסתר - משמש רק כמקור נתונים */}
                 <video 
                   ref={videoRef} 
                   src={videoPreview} 
                   playsInline
-                  webkit-playsinline="true"
-                  x-webkit-airplay="deny"
-                  disablePictureInPicture
-                  controlsList="nodownload nofullscreen noremoteplayback"
                   muted
-                  autoPlay
-                  preload="auto"
-                  className="w-full h-full object-contain pointer-events-none" 
+                  className="hidden" 
                 />
                 
-                <button
+                {/* הקנבס הוא זה שמציג את התמונה בפועל */}
+                <canvas 
+                  ref={canvasRef}
                   onClick={togglePlay}
-                  className="absolute inset-0 w-full h-full z-0 bg-transparent"
-                  aria-label="Play/Pause"
+                  className="w-full h-full object-contain cursor-pointer"
                 />
 
                 <div 
@@ -250,7 +260,7 @@ export default function Home() {
                   onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }}
                   onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
                 >
-                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
+                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter" style={{ fontFamily: 'Heebo, sans-serif', display: 'none', pointerEvents: 'none' }} />
                 </div>
               </div>
             ) : (
@@ -265,9 +275,7 @@ export default function Home() {
                     if(f){ 
                       setFile(f); 
                       const reader = new FileReader();
-                      reader.onload = (event) => {
-                        setVideoPreview(event.target?.result as string);
-                      };
+                      reader.onload = (event) => { setVideoPreview(event.target?.result as string); };
                       reader.readAsDataURL(f);
                     } 
                   }} 
@@ -309,7 +317,6 @@ export default function Home() {
           </div>
         </div>
       </main>
-
       <LabelFooter />
     </div>
   );

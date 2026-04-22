@@ -1,6 +1,5 @@
-@import "tailwindcss";
-
 @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&display=swap');
+@import "tailwindcss";
 
 :root {
   --background: #0a0a0a;
@@ -13,7 +12,7 @@ body {
   font-family: 'Heebo', sans-serif;
 }
 
-/* אנימציית כניסה מהירה וחדה - נשאר כפי שביקשת */
+/* אנימציית כניסה מהירה וחדה */
 @keyframes word-pop {
   0% {
     transform: scale(0.9);
@@ -37,9 +36,7 @@ body {
   scrollbar-width: none;
 }
 
-/* --- תיקון לנגן במובייל (למניעת מסך מלא) --- */
-
-/* מסתיר את כפתורי המערכת של אפל שיכולים להקפיץ את הווידאו החוצה */
+/* תיקון לנגן במובייל */
 video::-webkit-media-controls-fullscreen-button,
 video::-webkit-media-controls-play-button,
 video::-webkit-media-controls-start-playback-button {
@@ -47,15 +44,10 @@ video::-webkit-media-controls-start-playback-button {
     -webkit-appearance: none;
 }
 
-/* מונע מהאייפון להוסיף שכבת בקרה מעל הווידאו */
 video::-internal-media-controls-download-button {
     display:none;
 }
 
 video::-webkit-media-controls-enclosure {
     overflow:hidden !important;
-}
-
-video::-webkit-media-controls-panel {
-    width: calc(100% + 30px); /* תמרון להסתרת כפתורים במכשירים מסוימים */
 }

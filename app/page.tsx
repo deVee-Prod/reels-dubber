@@ -21,33 +21,28 @@ export default function Home() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const subtitleRef = useRef<HTMLSpanElement>(null); 
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
 
-  // --- שינוי קריטי למובייל: הגדרת הנגן דרך קוד ---
-  useEffect(() => {
+  // לוגיקת רינדור לקנבס - עוקף את נגן המובייל
+  const renderCanvas = () => {
     const video = videoRef.current;
-    if (!video) return;
-
-    // הגדרות "ברזל" ש-iOS חייב לקבל דרך JS כדי לאשר Inline
-    video.muted = true;
-    video.defaultMuted = true;
-    video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', 'true');
-    video.setAttribute('x5-playsinline', 'true');
-
-    // חסימה אקטיבית של מעבר למסך מלא
-    const handleFullscreen = (e: any) => {
-      e.preventDefault();
-      video.webkitExitFullScreen?.();
-      return false;
-    };
-
-    video.addEventListener('webkitbeginfullscreen', handleFullscreen, false);
-    return () => video.removeEventListener('webkitbeginfullscreen', handleFullscreen);
-  }, [videoPreview]);
+    const canvas = canvasRef.current;
+    if (video && canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx && video.readyState >= 2) {
+        if (canvas.width !== video.videoWidth) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+    }
+    requestRef.current = requestAnimationFrame(renderCanvas);
+  };
 
   const syncSubtitles = () => {
     if (videoRef.current && subtitleRef.current && transcription.length > 0) {
@@ -70,34 +65,38 @@ export default function Home() {
         lastWordRef.current = "";
       }
     }
-    requestRef.current = requestAnimationFrame(syncSubtitles);
   };
 
   useEffect(() => {
-    requestRef.current = requestAnimationFrame(syncSubtitles);
+    const mainLoop = () => {
+      renderCanvas();
+      syncSubtitles();
+    };
+    requestRef.current = requestAnimationFrame(mainLoop);
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
-  }, [transcription, fontScale, globalOffset]);
+  }, [transcription, fontScale, globalOffset, videoPreview]);
 
-  const togglePlay = () => {
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) {
-      video.play().catch(() => {});
-    } else {
-      video.pause();
-    }
-  };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFile = e.target.files?.[0];
-    if (uploadedFile) {
-      setFile(uploadedFile);
-      setVideoPreview(URL.createObjectURL(uploadedFile));
-      setTranscription([]); 
-    }
-  };
+    video.muted = true;
+    video.defaultMuted = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', 'true');
 
-  // שאר הפונקציות (handleDub, handleLogin וכו') נשארות ללא שינוי
+    const handleFullscreen = (e: any) => {
+      e.preventDefault();
+      try {
+        (video as any).webkitExitFullScreen?.();
+      } catch (err) {}
+      return false;
+    };
+
+    video.addEventListener('webkitbeginfullscreen', handleFullscreen, false);
+    return () => video.removeEventListener('webkitbeginfullscreen', handleFullscreen);
+  }, [videoPreview]);
+
   const loadFFmpeg = async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
     const { toBlobURL } = await import('@ffmpeg/util');
@@ -151,7 +150,7 @@ export default function Home() {
     const startPos = subtitlePos;
     const onMove = (moveEvent: any) => {
       const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
-      const delta = ((startY - currentY) / (videoRef.current?.clientHeight || 500)) * 100;
+      const delta = ((startY - currentY) / (canvasRef.current?.clientHeight || 500)) * 100;
       setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
     };
     const onEnd = () => {
@@ -164,6 +163,16 @@ export default function Home() {
     document.addEventListener('mouseup', onEnd);
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('touchend', onEnd);
+  };
+
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -228,15 +237,8 @@ export default function Home() {
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full" onClick={togglePlay}>
-                <video 
-                  ref={videoRef} 
-                  src={videoPreview} 
-                  playsInline
-                  webkit-playsinline="true"
-                  muted
-                  preload="auto"
-                  className="w-full h-full object-contain" 
-                />
+                <video ref={videoRef} src={videoPreview} playsInline muted style={{ display: 'none' }} />
+                <canvas ref={canvasRef} className="w-full h-full object-contain cursor-pointer" />
                 <div 
                   className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-10"
                   style={{ bottom: `${subtitlePos}%` }}
@@ -250,7 +252,10 @@ export default function Home() {
               <div onClick={() => fileInputRef.current?.click()} className="h-full w-full flex flex-col items-center justify-center cursor-pointer space-y-4">
                 <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mx-auto text-white/20 text-xl">+</div>
                 <p className="text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold">Upload Media</p>
-                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
+                <input type="file" ref={fileInputRef} onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) { setVideoPreview(URL.createObjectURL(f)); setFile(f); }
+                }} className="hidden" accept="video/*" />
               </div>
             )}
           </div>

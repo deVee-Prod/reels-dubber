@@ -27,7 +27,6 @@ export default function Home() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0); 
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
-  const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
   const [currentTime, setCurrentTime] = useState(0); 
   const [duration, setDuration] = useState(0); 
@@ -159,6 +158,7 @@ export default function Home() {
   };
 
   const loadFFmpeg = async () => {
+    if (ffmpegRef.current) return;
     try {
       const { FFmpeg } = await import('@ffmpeg/ffmpeg');
       const { toBlobURL } = await import('@ffmpeg/util');
@@ -169,13 +169,11 @@ export default function Home() {
         setExportProgress(Math.round(progress * 100));
       });
 
-      // שימוש ב-UMD בלבד ללא ESM כדי למנוע חסימות COEP
       const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
       await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
       });
-      setFfmpegLoaded(true);
     } catch (err) {
       console.error("FFmpeg Load Error:", err);
     }
@@ -184,14 +182,25 @@ export default function Home() {
   useEffect(() => {
     if (document.cookie.includes('session_access')) {
       setAuthorized(true);
-      loadFFmpeg();
+      loadFFmpeg(); // מתחיל לטעון ברקע
     }
   }, []);
 
   const handleDub = async () => {
-    if (!file || !ffmpegLoaded || !ffmpegRef.current) return;
+    if (!file) return;
     setIsDubbing(true);
+
+    // אם המנוע עוד לא מוכן, נטען אותו עכשיו בלי שהמשתמש יראה כפתור נעול
+    if (!ffmpegRef.current) {
+        await loadFFmpeg();
+    }
     const ffmpeg = ffmpegRef.current;
+    if (!ffmpeg) {
+        alert("תקלה בטעינת המנוע. נסה לרענן את העמוד.");
+        setIsDubbing(false);
+        return;
+    }
+
     const { fetchFile } = await import('@ffmpeg/util');
     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
     try {
@@ -217,10 +226,20 @@ export default function Home() {
   };
 
   const exportVideo = async (withSubtitles: boolean) => {
-    if (!file || !ffmpegLoaded || !ffmpegRef.current) return;
+    if (!file) return;
     setIsExporting(true);
     setExportProgress(0);
+    
+    if (!ffmpegRef.current) {
+        await loadFFmpeg();
+    }
     const ffmpeg = ffmpegRef.current;
+    if (!ffmpeg) {
+        alert("תקלה בטעינת המנוע. נסה לרענן את העמוד.");
+        setIsExporting(false);
+        return;
+    }
+
     const { fetchFile } = await import('@ffmpeg/util');
 
     try {
@@ -233,18 +252,6 @@ export default function Home() {
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
 
       if (withSubtitles && transcription.length > 0) {
-        let fontReady = false;
-        try {
-          // שימוש בלינק גלובלי של jsDelivr (הכי בטוח ל-CORS)
-          const fontUrl = "https://cdn.jsdelivr.net/gh/googlefonts/heebo@main/fonts/ttf/Heebo-Black.ttf";
-          const fontRes = await fetch(fontUrl);
-          if (fontRes.ok) {
-            const fontData = await fontRes.arrayBuffer();
-            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
-            fontReady = true;
-          }
-        } catch (e) { console.warn("Font fetch failed"); }
-
         const subtitleFilters = transcription.map((item, index) => {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
           const fontSize = Math.round(baseSize * 1.5); 
@@ -254,8 +261,8 @@ export default function Home() {
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
           
-          const fontArg = fontReady ? "fontfile=heebo.ttf:" : "";
-          return `drawtext=${fontArg}text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+          // הגרסה הבטוחה לחלוטין: בלי פונט בכלל! הכל יעבוד עם פונט המערכת.
+          return `drawtext=text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }
@@ -467,8 +474,8 @@ export default function Home() {
 
           <div className="flex flex-col gap-4">
             <div className="flex justify-center gap-4">
-              <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing && ffmpegLoaded ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
-                {isDubbing ? 'Syncing...' : (ffmpegLoaded ? '1. DUB!' : 'Loading Engine...')}
+              <button onClick={handleDub} disabled={!file || isDubbing} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
+                {isDubbing ? 'Syncing...' : '1. DUB!'}
               </button>
               
               {file && transcription.length === 0 && !isDubbing && (

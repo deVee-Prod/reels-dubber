@@ -27,7 +27,6 @@ export default function Home() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0); 
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
-  const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
   const [currentTime, setCurrentTime] = useState(0); 
   const [duration, setDuration] = useState(0); 
@@ -159,38 +158,52 @@ export default function Home() {
   };
 
   const loadFFmpeg = async () => {
+    if (ffmpegRef.current) return ffmpegRef.current;
     try {
       const { FFmpeg } = await import('@ffmpeg/ffmpeg');
       const { toBlobURL } = await import('@ffmpeg/util');
       const ffmpeg = new FFmpeg();
-      ffmpegRef.current = ffmpeg;
       
       ffmpeg.on('progress', ({ progress }) => {
         setExportProgress(Math.round(progress * 100));
       });
 
-      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+      // מעבר ל-CDN יציב יותר שלא חוסם CORS
+      const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
       await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
       });
-      setFfmpegLoaded(true);
+      
+      ffmpegRef.current = ffmpeg;
+      return ffmpeg;
     } catch (err) {
       console.error("FFmpeg Load Error:", err);
+      alert("שגיאה בטעינת מנוע העריכה. נסה לרענן את העמוד.");
+      return null;
     }
   };
 
   useEffect(() => {
     if (document.cookie.includes('session_access')) {
       setAuthorized(true);
-      loadFFmpeg();
+      loadFFmpeg(); // מנסה לטעון ברקע
     }
   }, []);
 
   const handleDub = async () => {
-    if (!file || !ffmpegLoaded || !ffmpegRef.current) return;
+    if (!file) return;
     setIsDubbing(true);
-    const ffmpeg = ffmpegRef.current;
+    
+    let ffmpeg = ffmpegRef.current;
+    if (!ffmpeg) {
+       ffmpeg = await loadFFmpeg();
+    }
+    if (!ffmpeg) {
+       setIsDubbing(false);
+       return;
+    }
+
     const { fetchFile } = await import('@ffmpeg/util');
     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
     try {
@@ -217,10 +230,19 @@ export default function Home() {
   };
 
   const exportVideo = async (withSubtitles: boolean) => {
-    if (!file || !ffmpegLoaded || !ffmpegRef.current) return;
+    if (!file) return;
     setIsExporting(true);
     setExportProgress(0);
-    const ffmpeg = ffmpegRef.current;
+    
+    let ffmpeg = ffmpegRef.current;
+    if (!ffmpeg) {
+       ffmpeg = await loadFFmpeg();
+    }
+    if (!ffmpeg) {
+       setIsExporting(false);
+       return;
+    }
+
     const { fetchFile } = await import('@ffmpeg/util');
 
     try {
@@ -242,7 +264,6 @@ export default function Home() {
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
           
-          // צריבה בטוחה ללא פונט חיצוני
           return `drawtext=text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
@@ -455,8 +476,9 @@ export default function Home() {
 
           <div className="flex flex-col gap-4">
             <div className="flex justify-center gap-4">
-              <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
-                {isDubbing ? 'Syncing...' : '1. DUB!'}
+              {/* שינוי קריטי: הכפתור לעולם לא ננעל בגלל ffmpegLoaded. אם לא נטען, ייטען בלחיצה */}
+              <button onClick={handleDub} disabled={!file || isDubbing} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
+                {isDubbing ? 'Syncing / Loading...' : '1. DUB!'}
               </button>
               
               {file && transcription.length === 0 && !isDubbing && (

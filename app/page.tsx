@@ -151,10 +151,6 @@ export default function Home() {
     setCurrentTime(newTime);
     if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
     if (audioRef.current) audioRef.current.currentTime = newTime;
-    if (videoObjRef.current && canvasRef.current && (!isPlaying || audioRef.current?.paused)) {
-       const ctx = canvasRef.current.getContext('2d');
-       if (ctx) ctx.drawImage(videoObjRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-    }
   };
 
   const loadFFmpeg = async () => {
@@ -238,15 +234,21 @@ export default function Home() {
       const inputPath = `input_${Date.now()}.${ext}`;
       const outputPath = `output_${Date.now()}.${ext}`;
 
+      // חישוב יחס ההמרה בין תצוגת המסך לרזולוציית הוידאו המקורית
+      const videoH = videoObjRef.current?.videoHeight || 1920;
+      const previewH = canvasRef.current?.clientHeight || 500;
+      const scaleRatio = videoH / previewH;
+
       // 1. כתיבת קובץ הוידאו
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
-      // 2. פתרון קלוד: כתיבת הפונט לתוך ה-Virtual Filesystem של FFmpeg
+      // 2. כתיבת פונט Heebo לזיכרון של FFmpeg
       try {
-        const fontData = await fetchFile('/Roboto.ttf');
-        await ffmpeg.writeFile('Roboto.ttf', fontData);
+        const fontUrl = `${window.location.origin}/heebo.ttf?v=${Date.now()}`;
+        const fontData = await fetchFile(fontUrl);
+        await ffmpeg.writeFile('myfont.ttf', fontData);
       } catch (e) {
-        console.error("Font file Roboto.ttf not found in public folder");
+        console.error("Font file heebo.ttf not found!");
       }
 
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
@@ -254,15 +256,20 @@ export default function Home() {
       if (withSubtitles && transcription.length > 0) {
         const subtitleFilters = transcription.map((item, index) => {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
-          const fontSize = Math.round(baseSize * 1.5); 
+          // שימוש ב-scaleRatio כדי להגדיל את הפונט בהתאם לרזולוציה המקורית
+          const fontSize = Math.round(baseSize * scaleRatio); 
+          
           let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
           safeWord = fixRTL(safeWord);
           const startT = Math.max(0, item.start + globalOffset);
           const endT = Math.max(0, item.end + globalOffset);
-          const yPos = `h-(h*${subtitlePos}/100)`;
           
-          // הוספת fontfile=Roboto.ttf לפילטר לפי הנחיית קלוד
-          return `drawtext=fontfile=Roboto.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+          // מיקום יחסי ופרופורציות למסגרת
+          const yPos = `h-(h*${subtitlePos}/100)-text_h`;
+          const borderW = Math.max(1, Math.round(3 * scaleRatio));
+          const shadowOff = Math.max(1, Math.round(2 * scaleRatio));
+
+          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=${borderW}:shadowcolor=black@0.5:shadowx=${shadowOff}:shadowy=${shadowOff}`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }
@@ -285,13 +292,14 @@ export default function Home() {
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_Export_${Date.now()}.${ext}`;
+      a.download = `deVee_Export_${Date.now()}.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
 
       await ffmpeg.deleteFile(inputPath);
       await ffmpeg.deleteFile(outputPath);
+      await ffmpeg.deleteFile('myfont.ttf');
 
     } catch (err: any) {
       console.error("Export failed:", err);

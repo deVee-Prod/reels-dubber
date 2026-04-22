@@ -21,51 +21,44 @@ export default function Home() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const subtitleRef = useRef<HTMLSpanElement>(null); 
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
 
-  // --- לולאת requestAnimationFrame: מצייר פריימים לקנבס + מסנכרן כתוביות ---
-  const syncSubtitles = () => {
+  useEffect(() => {
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const subtitle = subtitleRef.current;
+    if (!video) return;
+    const block = (e: Event) => { e.preventDefault(); };
+    video.addEventListener('webkitbeginfullscreen', block);
+    video.addEventListener('webkitendfullscreen', block);
+    return () => {
+      video.removeEventListener('webkitbeginfullscreen', block);
+      video.removeEventListener('webkitendfullscreen', block);
+    };
+  }, [videoPreview]);
 
-    // ציור פריים הוידאו על הקנבס
-    if (video && canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        canvas.width = video.videoWidth || canvas.offsetWidth;
-        canvas.height = video.videoHeight || canvas.offsetHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      }
-    }
-
-    // סנכרון כתוביות — בדיוק כמו קודם
-    if (video && subtitle && transcription.length > 0) {
-      const time = video.currentTime + globalOffset;
-      setCurrentTime(video.currentTime);
+  const syncSubtitles = () => {
+    if (videoRef.current && subtitleRef.current && transcription.length > 0) {
+      const time = videoRef.current.currentTime + globalOffset;
+      setCurrentTime(videoRef.current.currentTime);
       const wordObj = transcription.find(w => time >= w.start && time <= w.end);
       
       if (wordObj) {
         if (lastWordRef.current !== wordObj.word + wordObj.start) {
-          subtitle.innerText = wordObj.word;
-          subtitle.style.display = "inline-block";
+          subtitleRef.current.innerText = wordObj.word;
+          subtitleRef.current.style.display = "inline-block";
           const index = transcription.findIndex(w => w.start === wordObj.start);
           const sizes = [28, 42, 58];
           const dynamicSize = sizes[index % 3] * fontScale;
-          subtitle.style.fontSize = `${dynamicSize}px`;
+          subtitleRef.current.style.fontSize = `${dynamicSize}px`;
           lastWordRef.current = wordObj.word + wordObj.start;
         }
       } else {
-        subtitle.style.display = "none";
+        subtitleRef.current.style.display = "none";
         lastWordRef.current = "";
       }
     }
-
     requestRef.current = requestAnimationFrame(syncSubtitles);
   };
 
@@ -159,18 +152,13 @@ export default function Home() {
     document.addEventListener('touchend', onEnd);
   };
 
-  // --- Play/Pause: וידאו (מוסתר) + אודיו נפרד ---
   const togglePlay = () => {
     const video = videoRef.current;
-    const audio = audioRef.current;
-    if (!video || !audio) return;
-
+    if (!video) return;
     if (video.paused) {
       video.play().catch(() => {});
-      // audio.play().catch(() => {}); ← תגרום לזה להיות הערה זמנית
     } else {
       video.pause();
-      // audio.pause(); ← גם זה
     }
   };
 
@@ -236,53 +224,60 @@ export default function Home() {
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full">
-
-                {/* וידאו מוסתר לחלוטין — רץ ברקע, iOS לא רואה אותו */}
-                <video
-                  ref={videoRef}
-                  src={videoPreview}
+                <video 
+                  ref={videoRef} 
+                  src={videoPreview} 
                   playsInline
+                  webkit-playsinline="true"
+                  x-webkit-airplay="deny"
+                  disablePictureInPicture
+                  controlsList="nodownload nofullscreen noremoteplayback"
                   muted
-                  style={{ display: 'none' }}
+                  autoPlay
+                  preload="auto"
+                  className="w-full h-full object-contain pointer-events-none" 
                 />
-
-                {/* אודיו נפרד לשמע */}
-                <audio ref={audioRef} src={videoPreview} />
-
-                {/* קנבס — מה שהמשתמש רואה */}
-                <canvas
-                  ref={canvasRef}
-                  className="w-full h-full object-contain"
-                />
-
-                {/* כפתור Play/Pause שקוף */}
+                
                 <button
                   onClick={togglePlay}
                   className="absolute inset-0 w-full h-full z-0 bg-transparent"
                   aria-label="Play/Pause"
                 />
 
-                {/* שכבת כתוביות — לא השתנה דבר */}
                 <div 
-                  className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none"
+                  className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-10"
                   style={{ bottom: `${subtitlePos}%` }}
                   onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }}
                   onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
                 >
                   <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
                 </div>
-
               </div>
             ) : (
               <div onClick={() => fileInputRef.current?.click()} className="h-full w-full flex flex-col items-center justify-center cursor-pointer space-y-4">
                 <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mx-auto text-white/20 text-xl">+</div>
                 <p className="text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold">Upload Media</p>
-                <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ setFile(f); setVideoPreview(URL.createObjectURL(f)); } }} className="hidden" accept="video/*" />
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={(e) => { 
+                    const f = e.target.files?.[0]; 
+                    if(f){ 
+                      setFile(f); 
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        setVideoPreview(event.target?.result as string);
+                      };
+                      reader.readAsDataURL(f);
+                    } 
+                  }} 
+                  className="hidden" 
+                  accept="video/*" 
+                />
               </div>
             )}
           </div>
 
-          {/* Sync & Size Controls */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
@@ -298,7 +293,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Timeline */}
           <div className="h-24 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 flex gap-3 items-center overflow-x-auto no-scrollbar">
             {transcription.map((item, i) => (
               <div key={i} className={`h-full min-w-[110px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${currentTime >= item.start && currentTime <= item.end ? 'bg-[#A855F7]/30 border-[#A855F7]' : 'bg-white/[0.02] border-white/5'}`}>

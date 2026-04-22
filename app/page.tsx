@@ -16,13 +16,14 @@ export default function Home() {
   const [transcription, setTranscription] = useState<any[]>([]); 
   const [currentTime, setCurrentTime] = useState(0); 
   const [subtitlePos, setSubtitlePos] = useState(25);
-  const [fontScale, setFontScale] = useState(1); // [חדש] שליטה על גודל פונט כללי
+  const [fontScale, setFontScale] = useState(1);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
 
+  // סנכרון 60FPS - קריטי למניעת דיליי
   const animate = () => {
     if (videoRef.current && !videoRef.current.paused) {
       setCurrentTime(videoRef.current.currentTime);
@@ -101,18 +102,15 @@ export default function Home() {
 
   const getCurrentWord = () => {
     if (transcription.length === 0) return null;
-    const offset = 0.01; 
-    const time = currentTime + offset;
+    // ביטול אופסט לטובת זמן אמת מוחלט
+    const time = currentTime; 
     return transcription.find(w => time >= w.start && time <= w.end);
   };
 
-  // לוגיקת גדלים משתנים בשילוב עם הסליידר של המשתמש
   const getDynamicFontSize = () => {
     if (!currentWord || transcription.length === 0) return 24 * fontScale;
     const index = transcription.findIndex(w => w.start === currentWord.start);
     const cycle = index % 3; 
-    
-    // מדרגות גודל בפיקסלים, מוכפלים ב-fontScale של המשתמש
     const sizes = [28, 42, 58]; 
     return sizes[cycle] * fontScale;
   };
@@ -240,7 +238,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* [חדש] פאנל שליטה על גודל פונט */}
         <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
           <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
           <input 

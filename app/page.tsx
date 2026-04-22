@@ -21,32 +21,32 @@ export default function Home() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const subtitleRef = useRef<HTMLSpanElement>(null); 
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
 
-  // פונקציית הציור לקנבס
-  const renderFrame = () => {
-    if (videoRef.current && canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        if (canvasRef.current.width !== videoRef.current.videoWidth) {
-          canvasRef.current.width = videoRef.current.videoWidth;
-          canvasRef.current.height = videoRef.current.videoHeight;
-        }
-        ctx.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-      }
-    }
-    requestRef.current = requestAnimationFrame(renderFrame);
-  };
-
+  // --- שינוי קריטי למובייל: הגדרת הנגן דרך קוד ---
   useEffect(() => {
-    if (videoPreview) {
-      requestRef.current = requestAnimationFrame(renderFrame);
-    }
-    return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
+    const video = videoRef.current;
+    if (!video) return;
+
+    // הגדרות "ברזל" ש-iOS חייב לקבל דרך JS כדי לאשר Inline
+    video.muted = true;
+    video.defaultMuted = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', 'true');
+    video.setAttribute('x5-playsinline', 'true');
+
+    // חסימה אקטיבית של מעבר למסך מלא
+    const handleFullscreen = (e: any) => {
+      e.preventDefault();
+      video.webkitExitFullScreen?.();
+      return false;
+    };
+
+    video.addEventListener('webkitbeginfullscreen', handleFullscreen, false);
+    return () => video.removeEventListener('webkitbeginfullscreen', handleFullscreen);
   }, [videoPreview]);
 
   const syncSubtitles = () => {
@@ -70,12 +70,53 @@ export default function Home() {
         lastWordRef.current = "";
       }
     }
+    requestRef.current = requestAnimationFrame(syncSubtitles);
   };
 
   useEffect(() => {
-    const interval = setInterval(syncSubtitles, 30);
-    return () => clearInterval(interval);
+    requestRef.current = requestAnimationFrame(syncSubtitles);
+    return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [transcription, fontScale, globalOffset]);
+
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const uploadedFile = e.target.files?.[0];
+    if (uploadedFile) {
+      setFile(uploadedFile);
+      setVideoPreview(URL.createObjectURL(uploadedFile));
+      setTranscription([]); 
+    }
+  };
+
+  // שאר הפונקציות (handleDub, handleLogin וכו') נשארות ללא שינוי
+  const loadFFmpeg = async () => {
+    const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+    const { toBlobURL } = await import('@ffmpeg/util');
+    const ffmpeg = new FFmpeg();
+    ffmpegRef.current = ffmpeg;
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    setFfmpegLoaded(true);
+  };
+
+  useEffect(() => {
+    if (document.cookie.includes('session_access')) {
+      setAuthorized(true);
+      loadFFmpeg();
+    }
+  }, []);
 
   const handleDub = async () => {
     if (!file || !ffmpegLoaded || !ffmpegRef.current) return;
@@ -110,7 +151,7 @@ export default function Home() {
     const startPos = subtitlePos;
     const onMove = (moveEvent: any) => {
       const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
-      const delta = ((startY - currentY) / (canvasRef.current?.clientHeight || 500)) * 100;
+      const delta = ((startY - currentY) / (videoRef.current?.clientHeight || 500)) * 100;
       setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
     };
     const onEnd = () => {
@@ -125,13 +166,6 @@ export default function Home() {
     document.addEventListener('touchend', onEnd);
   };
 
-  const togglePlay = () => {
-    if (videoRef.current) {
-      if (videoRef.current.paused) videoRef.current.play().catch(() => {});
-      else videoRef.current.pause();
-    }
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
@@ -143,16 +177,7 @@ export default function Home() {
       });
       if (res.ok) {
         setAuthorized(true);
-        const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-        const { toBlobURL } = await import('@ffmpeg/util');
-        const ffmpeg = new FFmpeg();
-        ffmpegRef.current = ffmpeg;
-        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-        await ffmpeg.load({
-          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-        });
-        setFfmpegLoaded(true);
+        loadFFmpeg();
       } else {
         setLoginError(true);
         setPassword('');
@@ -169,7 +194,7 @@ export default function Home() {
     <footer className="w-full py-12 flex flex-col items-center space-y-4 opacity-40 mt-auto">
       <p className="text-[10px] tracking-[0.2em] font-medium text-white/60">Powered By deVee Boutique Label</p>
       <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 relative shadow-2xl">
-         <Image src="/label_logo.jpg" alt="deVee Label" fill className="object-cover scale-110" />
+         <Image src="/label_logo.jpg" alt="deVee Label" width={48} height={48} className="object-cover scale-110" />
       </div>
     </footer>
   );
@@ -177,8 +202,8 @@ export default function Home() {
   if (!authorized) {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col items-center">
-        <main className="flex-1 flex flex-col items-center justify-center p-8 w-full">
-          <div className="w-full max-w-[340px] space-y-8 text-center">
+        <main className="flex-1 flex flex-col items-center justify-center p-8 w-full text-center">
+          <div className="w-full max-w-[340px] space-y-8">
             <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
             <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl">
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
@@ -203,11 +228,15 @@ export default function Home() {
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full" onClick={togglePlay}>
-                {/* וידאו נסתר לצורך נתונים בלבד - iOS לא רואה אותו */}
-                <video ref={videoRef} src={videoPreview} playsInline muted className="hidden" />
-                {/* הקנבס הוא מה שהמשתמש רואה בפועל */}
-                <canvas ref={canvasRef} className="w-full h-full object-contain cursor-pointer" />
-
+                <video 
+                  ref={videoRef} 
+                  src={videoPreview} 
+                  playsInline
+                  webkit-playsinline="true"
+                  muted
+                  preload="auto"
+                  className="w-full h-full object-contain" 
+                />
                 <div 
                   className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-10"
                   style={{ bottom: `${subtitlePos}%` }}
@@ -221,7 +250,7 @@ export default function Home() {
               <div onClick={() => fileInputRef.current?.click()} className="h-full w-full flex flex-col items-center justify-center cursor-pointer space-y-4">
                 <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mx-auto text-white/20 text-xl">+</div>
                 <p className="text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold">Upload Media</p>
-                <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ setVideoPreview(URL.createObjectURL(f)); setFile(f); } }} className="hidden" accept="video/*" />
+                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
               </div>
             )}
           </div>
@@ -234,9 +263,9 @@ export default function Home() {
             <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Sync</span>
               <div className="flex items-center space-x-3">
-                <button onClick={() => setGlobalOffset(prev => prev - 0.05)} className="w-6 h-6 rounded-full bg-white/5">-</button>
+                <button onClick={() => setGlobalOffset(prev => prev - 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">-</button>
                 <span className="text-[8px] font-mono text-[#A855F7]">{globalOffset.toFixed(2)}s</span>
-                <button onClick={() => setGlobalOffset(prev => prev + 0.05)} className="w-6 h-6 rounded-full bg-white/5">+</button>
+                <button onClick={() => setGlobalOffset(prev => prev + 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">+</button>
               </div>
             </div>
           </div>
@@ -245,9 +274,9 @@ export default function Home() {
             {transcription.map((item, i) => (
               <div key={i} className={`h-full min-w-[110px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${currentTime >= item.start && currentTime <= item.end ? 'bg-[#A855F7]/30 border-[#A855F7]' : 'bg-white/[0.02] border-white/5'}`}>
                 <input value={item.word} onChange={(e) => {
-                  const updated = [...transcription];
-                  updated[i].word = e.target.value;
-                  setTranscription(updated);
+                   const updated = [...transcription];
+                   updated[i].word = e.target.value;
+                   setTranscription(updated);
                 }} className="bg-transparent border-none outline-none text-[11px] text-white font-bold text-center w-full focus:text-[#A855F7]" />
               </div>
             ))}

@@ -3,6 +3,23 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 
+// פונקציית עזר לעיצוב הזמן (00:00)
+const formatTime = (time: number) => {
+  if (isNaN(time)) return "00:00";
+  const m = Math.floor(time / 60).toString().padStart(2, '0');
+  const s = Math.floor(time % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+};
+
+// פונקציה חיונית ל-FFmpeg: הופכת עברית כדי שתוצג נכון בסרטון הצרוב
+const fixRTL = (text: string) => {
+  const hebrewRegex = /[\u0590-\u05FF]/;
+  if (hebrewRegex.test(text)) {
+     return text.split('').reverse().join('');
+  }
+  return text;
+};
+
 export default function Home() {
   const [authorized, setAuthorized] = useState(false);
   const [password, setPassword] = useState('');
@@ -16,10 +33,11 @@ export default function Home() {
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const [transcription, setTranscription] = useState<any[]>([]); 
   const [currentTime, setCurrentTime] = useState(0); 
+  const [duration, setDuration] = useState(0); // State חדש לאורך הסרטון
   const [subtitlePos, setSubtitlePos] = useState(25);
   const [fontScale, setFontScale] = useState(1);
   const [globalOffset, setGlobalOffset] = useState(0); 
-  const [isPlaying, setIsPlaying] = useState(false); // State חדש למעקב אחרי ניגון
+  const [isPlaying, setIsPlaying] = useState(false); 
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -52,7 +70,8 @@ export default function Home() {
 
       if (subtitleRef.current && transcription.length > 0) {
         const time = audio.currentTime + globalOffset;
-        setCurrentTime(audio.currentTime);
+        if (isPlaying) setCurrentTime(audio.currentTime); // מעדכן את ציר הזמן רק כשמנגן
+        
         const wordObj = transcription.find(w => time >= w.start && time <= w.end);
         
         if (wordObj) {
@@ -77,11 +96,12 @@ export default function Home() {
   useEffect(() => {
     requestRef.current = requestAnimationFrame(syncAndDraw);
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
-  }, [transcription, fontScale, globalOffset]);
+  }, [transcription, fontScale, globalOffset, isPlaying]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
     if (uploadedFile) {
+      if (videoPreview) URL.revokeObjectURL(videoPreview);
       setFile(uploadedFile);
       const buffer = await uploadedFile.arrayBuffer();
       const blob = new Blob([buffer], { type: 'video/mp4' }); 
@@ -89,6 +109,7 @@ export default function Home() {
       setVideoPreview(url);
       setTranscription([]); 
       setIsPlaying(false);
+      setCurrentTime(0);
 
       const video = document.createElement('video');
       video.src = url;
@@ -117,6 +138,7 @@ export default function Home() {
     if (!video || !audio) return;
 
     if (audio.paused) {
+      video.muted = true;
       try {
         await video.play();
         await audio.play();
@@ -131,11 +153,30 @@ export default function Home() {
     }
   };
 
+  // פונקציה חדשה לגרירת ציר הזמן
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
+    if (audioRef.current) audioRef.current.currentTime = newTime;
+    
+    // ציור פריים בודד בזמן הגרירה גם אם ב-Pause
+    if (videoObjRef.current && canvasRef.current && !isPlaying) {
+       const ctx = canvasRef.current.getContext('2d');
+       if (ctx) ctx.drawImage(videoObjRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+    }
+  };
+
   const loadFFmpeg = async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
     const { toBlobURL } = await import('@ffmpeg/util');
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
+    
+    ffmpeg.on('log', ({ message }) => {
+      console.log('FFmpeg:', message); // יעזור לנו לדבג אם יהיו תקלות בעתיד
+    });
+
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
@@ -157,8 +198,8 @@ export default function Home() {
     const ffmpeg = ffmpegRef.current;
     const { fetchFile } = await import('@ffmpeg/util');
     try {
-      await ffmpeg.writeFile('input_video', await fetchFile(file));
-      await ffmpeg.exec(['-i', 'input_video', '-vn', '-ab', '128k', 'output_audio.mp3']);
+      await ffmpeg.writeFile('input.mp4', await fetchFile(file));
+      await ffmpeg.exec(['-i', 'input.mp4', '-vn', '-ab', '128k', 'output_audio.mp3']);
       const data = await ffmpeg.readFile('output_audio.mp3');
       const audioBlob = new Blob([data as any], { type: 'audio/mp3' });
       const formData = new FormData();
@@ -185,8 +226,8 @@ export default function Home() {
     const { fetchFile } = await import('@ffmpeg/util');
 
     try {
-      // כתיבת הקובץ המקורי לזיכרון של FFmpeg (קריטי!)
-      await ffmpeg.writeFile('input_video', await fetchFile(file));
+      // כתיבה מסודרת של הקובץ לזיכרון של FFmpeg
+      await ffmpeg.writeFile('input.mp4', await fetchFile(file));
 
       const fontRes = await fetch('https://raw.githubusercontent.com/googlefonts/heebo/main/fonts/ttf/Heebo-Black.ttf');
       const fontData = await fontRes.arrayBuffer();
@@ -195,27 +236,36 @@ export default function Home() {
       const filters = transcription.map((item, index) => {
         const baseSize = [28, 42, 58][index % 3] * fontScale;
         const fontSize = Math.round(baseSize * 1.5); 
-        const safeWord = item.word.replace(/'/g, "\u2019").replace(/:/g, "\\:");
+        
+        // הגנה מפני תווים ששוברים את FFmpeg ותיקון עברית
+        let safeWord = item.word.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'").replace(/,/g, "\\,");
+        safeWord = fixRTL(safeWord);
+
         const startT = Math.max(0, item.start + globalOffset);
         const endT = Math.max(0, item.end + globalOffset);
         const yPos = `h-(h*${subtitlePos}/100)`;
 
-        return `drawtext=fontfile=/font.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black:shadowx=2:shadowy=2`;
+        return `drawtext=fontfile=font.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black:shadowx=2:shadowy=2`;
       });
 
       const filterGraph = filters.join(',');
 
-      await ffmpeg.exec([
-        '-i', 'input_video',
+      // שינוי קריטי מ-copy ל-aac כדי להבטיח שהסאונד יכתב כראוי ולא ייצור קובץ פגום
+      const ret = await ffmpeg.exec([
+        '-i', 'input.mp4',
         '-vf', filterGraph,
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
-        '-c:a', 'copy',
+        '-c:a', 'aac', 
         'output_final.mp4'
       ]);
 
+      if (ret !== 0) throw new Error("FFmpeg encoding failed");
+
       const data = await ffmpeg.readFile('output_final.mp4');
-      const videoBlob = new Blob([data as any], { type: 'video/mp4' });
+      if (data.byteLength === 0) throw new Error("Exported file is 0 bytes");
+
+      const videoBlob = new Blob([data.buffer as ArrayBuffer], { type: 'video/mp4' });
       const downloadUrl = URL.createObjectURL(videoBlob);
 
       const a = document.createElement('a');
@@ -225,9 +275,11 @@ export default function Home() {
       a.click();
       document.body.removeChild(a);
 
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+
     } catch (err) {
       console.error("Export failed:", err);
-      alert("Error exporting video");
+      alert("שגיאה בייצוא הווידאו. בדוק את חיבור האינטרנט ונסה שוב.");
     } finally {
       setIsExporting(false);
     }
@@ -251,6 +303,27 @@ export default function Home() {
         setTimeout(() => setLoginError(false), 2000);
       }
     } catch (err) { console.error(err); } finally { setLoginLoading(false); }
+  };
+
+  const startDragging = (e: any) => {
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const startY = clientY;
+    const startPos = subtitlePos;
+    const onMove = (moveEvent: any) => {
+      const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
+      const delta = ((startY - currentY) / (canvasRef.current?.clientHeight || 500)) * 100;
+      setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
+    };
+    const onEnd = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
   };
 
   const LabelFooter = () => (
@@ -287,12 +360,19 @@ export default function Home() {
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center group">
             {videoPreview ? (
               <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
-                <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline />
+                <audio 
+                  ref={audioRef} 
+                  src={videoPreview} 
+                  preload="auto" 
+                  className="hidden" 
+                  playsInline 
+                  onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} 
+                />
                 <canvas ref={canvasRef} className="w-full h-full object-contain" />
                 
-                {/* Play/Pause Overlay */}
+                {/* Overlay Play Button */}
                 {!isPlaying && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity">
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity">
                     <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20">
                       <div className="w-0 h-0 border-t-[10px] border-t-transparent border-l-[18px] border-l-white border-b-[10px] border-b-transparent ml-1" />
                     </div>
@@ -302,6 +382,8 @@ export default function Home() {
                 <div 
                   className="absolute left-0 right-0 flex justify-center px-6 text-center select-none z-30"
                   style={{ bottom: `${subtitlePos}%` }}
+                  onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }}
+                  onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
                 >
                   <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
                 </div>
@@ -315,6 +397,23 @@ export default function Home() {
             )}
           </div>
 
+          {/* ה-Timeline החדש! */}
+          {videoPreview && (
+             <div className="flex items-center gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4">
+               <span className="text-[10px] font-mono text-white/50 w-8 text-right">{formatTime(currentTime)}</span>
+               <input 
+                 type="range" 
+                 min="0" 
+                 max={duration || 100} 
+                 step="0.01" 
+                 value={currentTime} 
+                 onChange={handleSeek} 
+                 className="flex-1 h-1 bg-white/10 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer"
+               />
+               <span className="text-[10px] font-mono text-white/50 w-8">{formatTime(duration)}</span>
+             </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
@@ -323,9 +422,9 @@ export default function Home() {
             <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Sync</span>
               <div className="flex items-center space-x-3">
-                <button onClick={() => setGlobalOffset(prev => prev - 0.05)} className="w-6 h-6 rounded-full bg-white/5">-</button>
+                <button onClick={() => setGlobalOffset(prev => prev - 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">-</button>
                 <span className="text-[8px] font-mono text-[#A855F7]">{globalOffset.toFixed(2)}s</span>
-                <button onClick={() => setGlobalOffset(prev => prev + 0.05)} className="w-6 h-6 rounded-full bg-white/5">+</button>
+                <button onClick={() => setGlobalOffset(prev => prev + 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">+</button>
               </div>
             </div>
           </div>

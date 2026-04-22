@@ -17,13 +17,13 @@ export async function POST(req: Request) {
     const base64Audio = Buffer.from(arrayBuffer).toString('base64');
 
     const prompt = `
-      תמלל את האודיו מילה במילה.
+      תמלל את האודיו מילה במילה
       החזר JSON בלבד במבנה הבא:
       [
         {"word": "מילה", "start": 0.1, "end": 0.5},
         ...
       ]
-      חשוב: תן עדיפות עליונה לזמן ההתחלה (start) של כל מילה.
+      חשוב: תן עדיפות עליונה לזמן ההתחלה (start) של כל מילה
     `;
 
     const result = await model.generateContent([
@@ -42,10 +42,6 @@ export async function POST(req: Request) {
     
     const transcriptionData = JSON.parse(jsonMatch[0]);
 
-    // חזרה לערכים שעבדו טוב + ליטוש קטן
-    const lookahead = 0.18; // הקדמה שמבטיחה פאנץ'
-    const blockScale = 0.85; // משאירים 85% מהמילה (יותר יציב מ-65% או 70%)
-
     const formattedTranscription = [{
       text: transcriptionData.map((w: any) => w.word).join(' '),
       words: transcriptionData.map((w: any, index: number) => {
@@ -53,14 +49,33 @@ export async function POST(req: Request) {
         const oEnd = Number(w.end);
         const duration = oEnd - oStart;
 
+        // אלגוריתם קיזוז דינמי (Dynamic Lookahead)
+        let lookahead = 0.15; 
+        if (duration < 0.35) {
+            lookahead = 0.22; // דיבור מהיר - הקדמה אגרסיבית
+        } else if (duration > 0.6) {
+            lookahead = 0.10; // דיבור איטי - הקדמה עדינה
+        }
+
         let start = Math.max(0, oStart - lookahead);
+        
+        // כיווץ משך המילה דינמי - חותכים יותר חזק במילים מהירות
+        const blockScale = duration < 0.35 ? 0.75 : 0.85; 
         let end = start + (duration * blockScale);
 
-        // מניעת חפיפה קריטית
+        // מניעת התנגשויות שלוקחת בחשבון את המילה הבאה
         if (index < transcriptionData.length - 1) {
-            const nextS = Math.max(0, Number(transcriptionData[index + 1].start) - lookahead);
+            const nextOStart = Number(transcriptionData[index + 1].start);
+            const nextDuration = Number(transcriptionData[index + 1].end) - nextOStart;
+            
+            let nextLookahead = 0.15;
+            if (nextDuration < 0.35) nextLookahead = 0.22;
+            else if (nextDuration > 0.6) nextLookahead = 0.10;
+
+            const nextS = Math.max(0, nextOStart - nextLookahead);
+            
             if (end > nextS) {
-                end = nextS - 0.01; // חיתוך מילימטרי לפני המילה הבאה
+                end = nextS - 0.01; 
             }
         }
 

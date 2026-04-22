@@ -20,35 +20,30 @@ export default function Home() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
-  const subtitleRef = useRef<HTMLSpanElement>(null); // רפרנס ישיר לטקסט
+  const subtitleRef = useRef<HTMLSpanElement>(null); 
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
-  const lastWordRef = useRef<string>(""); // מעקב למניעת רינדור מיותר
+  const lastWordRef = useRef<string>("");
 
-  // פונקציית סנכרון אולטרה-מהירה שמעדכנת את ה-DOM ישירות
+  // סנכרון בזמן אמת - ללא אנימציות לעיבוד מקסימלי
   const syncSubtitles = () => {
     if (videoRef.current && subtitleRef.current && transcription.length > 0) {
       const time = videoRef.current.currentTime;
-      setCurrentTime(time); // נשאר עבור הטימליין בלבד
+      setCurrentTime(time);
 
-      // מציאת המילה עם אופסט אפסי (בזמן אמת)
       const wordObj = transcription.find(w => time >= w.start && time <= w.end);
       
       if (wordObj) {
         if (lastWordRef.current !== wordObj.word + wordObj.start) {
+          // עדכון טקסט מיידי ב-DOM
           subtitleRef.current.innerText = wordObj.word;
           subtitleRef.current.style.display = "inline-block";
           
-          // חישוב גודל דינמי
+          // גודל משתנה
           const index = transcription.findIndex(w => w.start === wordObj.start);
           const sizes = [28, 42, 58];
           const dynamicSize = sizes[index % 3] * fontScale;
           subtitleRef.current.style.fontSize = `${dynamicSize}px`;
-          
-          // הפעלת האנימציה מחדש ידנית
-          subtitleRef.current.classList.remove('animate-word-pop');
-          void subtitleRef.current.offsetWidth; // Trigger reflow
-          subtitleRef.current.classList.add('animate-word-pop');
           
           lastWordRef.current = wordObj.word + wordObj.start;
         }
@@ -65,9 +60,8 @@ export default function Home() {
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [transcription, fontScale]); // מתעדכן כשמשנים גודל או כשעולה טרנסקריפציה
+  }, [transcription, fontScale]);
 
-  // ... (handleDub, handleFileUpload, handleLogin נשארים ללא שינוי)
   const loadFFmpeg = async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
     const { toBlobURL } = await import('@ffmpeg/util');
@@ -177,12 +171,12 @@ export default function Home() {
   if (!authorized) {
     return (
       <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8">
-        <div className="w-full max-w-[340px] space-y-8 text-center">
-            <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
-            <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5">
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px]" placeholder="ACCESS KEY" />
-              <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
-            </form>
+        <div className="w-full max-w-[340px] space-y-8">
+          <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
+          <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl">
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px]" placeholder="ACCESS KEY" />
+            <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
+          </form>
         </div>
       </main>
     );
@@ -205,11 +199,16 @@ export default function Home() {
                 style={{ bottom: `${subtitlePos}%` }}
                 onMouseDown={startDragging}
               >
-                {/* כאן קורה הקסם - האלמנט נשאר קבוע והתוכן משתנה ב-DOM */}
+                {/* כאן הטקסט מופיע ב-Cut חד ללא שום אנימציה לסנכרון מושלם */}
                 <span 
                   ref={subtitleRef}
-                  className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter animate-word-pop" 
-                  style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }}
+                  className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter" 
+                  style={{ 
+                    fontFamily: 'Heebo, sans-serif', 
+                    display: 'none',
+                    paintOrder: 'stroke fill',
+                    WebkitTextStroke: '1px rgba(0,0,0,0.3)'
+                  }}
                 />
               </div>
             </div>
@@ -225,7 +224,7 @@ export default function Home() {
         {/* Size Slider */}
         <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
           <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
-          <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7]" />
+          <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7] h-1 bg-white/10 rounded-full appearance-none cursor-pointer" />
           <span className="text-[7px] uppercase tracking-[0.3em] text-[#A855F7] font-bold">{(fontScale * 100).toFixed(0)}%</span>
         </div>
 

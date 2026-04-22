@@ -123,7 +123,6 @@ export default function Home() {
   };
 
   const startDragging = (e: any) => {
-    // תמיכה במגע (Touch) ובמיקוד (Mouse)
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const startY = clientY;
     const startPos = subtitlePos;
@@ -184,11 +183,11 @@ export default function Home() {
     return (
       <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8">
         <div className="w-full max-w-[340px] space-y-8 text-center">
-            <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
-            <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl text-center">
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
-              <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
-            </form>
+          <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
+          <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl">
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
+            <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
+          </form>
         </div>
       </main>
     );
@@ -205,12 +204,13 @@ export default function Home() {
         <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl">
           {videoPreview ? (
             <div className="relative w-full h-full">
+              {/* המאפיין muted קריטי למובייל כדי למנוע קפיצה לנגן חיצוני */}
               <video 
                 ref={videoRef} 
                 src={videoPreview} 
                 controls 
                 playsInline
-                muted // חובה ב-iOS כדי למנוע קפיצה למסך מלא
+                muted
                 webkit-playsinline="true"
                 x5-playsinline="true"
                 className="w-full h-full object-contain" 

@@ -242,7 +242,7 @@ export default function Home() {
         await ffmpeg.writeFile('myfont.ttf', new Uint8Array(fontBuffer));
       } catch (e) {
         console.error("Font loading error:", e);
-        alert("הפונט לא נמצא בשרת. וודא שהשם ב-GitHub תואם בדיוק!");
+        alert("הפונט לא נמצא בשרת.");
         setIsExporting(false);
         return;
       }
@@ -254,17 +254,18 @@ export default function Home() {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
           const fontSize = Math.round(baseSize * scaleRatio); 
           
-          // הסרנו את ה-fixRTL! FFmpeg יעשה את זה לבד
           let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
           
-          const startT = Math.max(0, item.start + globalOffset);
-          const endT = Math.max(0, item.end + globalOffset);
+          // סנכרון זמנים עם Offset מעודכן
+          const startT = Number((item.start + globalOffset).toFixed(3));
+          const endT = Number((item.end + globalOffset).toFixed(3));
           
           const yPos = `h-(h*${subtitlePos}/100)-text_h`;
-          const borderW = Math.max(1, Math.round(3 * scaleRatio));
+          
+          // צל עדין בלבד (בלי מסגרת שחורה גסה)
           const shadowOff = Math.max(1, Math.round(2 * scaleRatio));
 
-          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=${borderW}:shadowcolor=black@0.5:shadowx=${shadowOff}:shadowy=${shadowOff}`;
+          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${Math.max(0, startT)},${Math.max(0, endT)})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:shadowcolor=black@0.4:shadowx=${shadowOff}:shadowy=${shadowOff}`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }

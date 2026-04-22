@@ -228,7 +228,7 @@ export default function Home() {
       if (withSubtitles && transcription.length > 0) {
         let fontReady = false;
         
-        // 1. ניסיון משיכה מה-public המקומי עם שובר קאש
+        // שלב 1: ניסיון אחרון מה-public
         try {
           const fontRes = await fetch(`/heebo.ttf?v=${Date.now()}`);
           if (fontRes.ok) {
@@ -238,22 +238,15 @@ export default function Home() {
           }
         } catch (e) { console.warn("Local font fetch failed"); }
 
-        // 2. גיבוי: משיכה מ-GitHub דרך CORS Proxy
+        // שלב 2: אם ה-public נכשל (כמו שקורה לך עכשיו), נשתמש בלינק מיוחד של Vercel או לינק חלופי
         if (!fontReady) {
-          try {
-            const proxyUrl = "https://corsproxy.io/?https://raw.githubusercontent.com/googlefonts/heebo/main/fonts/ttf/Heebo-Black.ttf";
-            const fontBuffer = await fetch(proxyUrl).then(res => {
-              if (!res.ok) throw new Error("Proxy failed");
-              return res.arrayBuffer();
-            });
-            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontBuffer));
-            fontReady = true;
-          } catch (e2) { console.error("All font fallbacks failed"); }
-        }
-
-        // הגנה: אם אין פונט, עוצרים כדי למנוע 0KB
-        if (!fontReady) {
-          throw new Error("לא הצלחנו לטעון את הפונט. הייצוא הופסק כדי למנוע קובץ שבור.");
+            try {
+                // לינק נוסף יציב מאוד דרך jsDelivr שלא חוסם CORS
+                const fallbackUrl = "https://cdn.jsdelivr.net/gh/googlefonts/heebo@main/fonts/ttf/Heebo-Black.ttf";
+                const fontBuffer = await fetch(fallbackUrl).then(res => res.arrayBuffer());
+                await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontBuffer));
+                fontReady = true;
+            } catch (e2) { console.error("All font fallbacks failed"); }
         }
 
         const subtitleFilters = transcription.map((item, index) => {
@@ -265,7 +258,9 @@ export default function Home() {
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
           
-          return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+          // אם אין פונט, אנחנו פשוט לא נזריק את ה-fontfile כדי שהמנוע לא יקרוס
+          const fontArg = fontReady ? "fontfile=heebo.ttf:" : "";
+          return `drawtext=${fontArg}text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }
@@ -288,7 +283,7 @@ export default function Home() {
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_${withSubtitles ? 'DUB' : 'CLEAN'}.${ext}`;
+      a.download = `deVee_Export_${Date.now()}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -298,7 +293,7 @@ export default function Home() {
 
     } catch (err: any) {
       console.error("Export failed:", err);
-      alert(err.message || "Export failed");
+      alert("Export failed - check console");
     } finally {
       setIsExporting(false);
       setExportProgress(0);

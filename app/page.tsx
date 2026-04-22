@@ -26,7 +26,7 @@ export default function Home() {
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
 
-  // --- לוגיקת הסנכרון ---
+  // סנכרון כתוביות
   const syncSubtitles = () => {
     if (videoRef.current && subtitleRef.current && transcription.length > 0) {
       const time = videoRef.current.currentTime + globalOffset;
@@ -37,8 +37,7 @@ export default function Home() {
           subtitleRef.current.innerText = wordObj.word;
           subtitleRef.current.style.display = "inline-block";
           const index = transcription.findIndex(w => w.start === wordObj.start);
-          const sizes = [28, 42, 58];
-          const dynamicSize = sizes[index % 3] * fontScale;
+          const dynamicSize = [28, 42, 58][index % 3] * fontScale;
           subtitleRef.current.style.fontSize = `${dynamicSize}px`;
           lastWordRef.current = wordObj.word + wordObj.start;
         }
@@ -55,43 +54,43 @@ export default function Home() {
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [transcription, fontScale, globalOffset]);
 
-  // --- התיקון למובייל: הגדרות נגן ---
+  // הגדרות "ברזל" למובייל - חובה להריץ כל פעם שיש Preview חדש
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !videoPreview) return;
 
     video.muted = true;
     video.defaultMuted = true;
     video.setAttribute('playsinline', '');
     video.setAttribute('webkit-playsinline', 'true');
-    video.setAttribute('disableRemotePlayback', 'true');
+    video.load(); // מכריח את ה-iOS לטעון את ההגדרות החדשות של ה-Blob
 
-    const handleFullscreen = (e: any) => {
-      e.preventDefault();
-      return false;
-    };
-
+    const handleFullscreen = (e: any) => { e.preventDefault(); return false; };
     video.addEventListener('webkitbeginfullscreen', handleFullscreen, false);
     return () => video.removeEventListener('webkitbeginfullscreen', handleFullscreen);
   }, [videoPreview]);
 
-  const togglePlay = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      video.play().catch(() => {});
-    } else {
-      video.pause();
-    }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // הטיפול החדש בהעלאת קובץ - הופך את ה-Blob לידידותי ל-iOS
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
     if (uploadedFile) {
       setFile(uploadedFile);
-      setVideoPreview(URL.createObjectURL(uploadedFile));
+      
+      // במקום URL.createObjectURL פשוט, אנחנו יוצרים Blob חדש עם MIME type מפורש
+      // זה עוזר ל-WebKit להבין איך לרנדר את זה Inline
+      const buffer = await uploadedFile.arrayBuffer();
+      const blob = new Blob([buffer], { type: 'video/mp4' }); 
+      const url = URL.createObjectURL(blob);
+      
+      setVideoPreview(url);
       setTranscription([]); 
     }
+  };
+
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.paused ? video.play().catch(() => {}) : video.pause();
   };
 
   const loadFFmpeg = async () => {
@@ -193,16 +192,12 @@ export default function Home() {
 
   if (!authorized) {
     return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center">
-        <main className="flex-1 flex flex-col items-center justify-center p-8 w-full text-center">
-          <div className="w-full max-w-[340px] space-y-8">
-            <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
-            <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl">
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
-              <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
-            </form>
-          </div>
-        </main>
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center">
+        <Image src="/logo.png" alt="deVee" width={100} height={32} className="mb-8" />
+        <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl w-full max-w-[340px]">
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
+          <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
+        </form>
         <LabelFooter />
       </div>
     );
@@ -219,36 +214,23 @@ export default function Home() {
         <div className="w-full space-y-8 pb-10">
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
-              <div className="relative w-full h-full overflow-hidden">
-                <video 
-                  ref={videoRef} 
-                  src={videoPreview} 
-                  playsInline
-                  webkit-playsinline="true"
-                  muted
-                  className="w-full h-full object-contain pointer-events-none" 
-                />
-                
-                {/* שכבה שקופה שסופגת את הלחיצות */}
+              <div className=\"relative w-full h-full\">
+                <video ref={videoRef} src={videoPreview} playsInline webkit-playsinline=\"true\" muted className=\"w-full h-full object-contain\" />
+                <div className=\"absolute inset-0 z-20 bg-transparent cursor-pointer\" onClick={togglePlay} />
                 <div 
-                  className="absolute inset-0 z-20 bg-transparent cursor-pointer touch-none"
-                  onClick={togglePlay}
-                />
-
-                <div 
-                  className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-30"
+                  className=\"absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-30\"
                   style={{ bottom: `${subtitlePos}%` }}
                   onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }}
                   onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
                 >
-                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter" style={{ fontFamily: 'Heebo, sans-serif', display: 'none', pointerEvents: 'none' }} />
+                  <span ref={subtitleRef} className=\"text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter\" style={{ fontFamily: 'Heebo, sans-serif', display: 'none', pointerEvents: 'none' }} />
                 </div>
               </div>
             ) : (
-              <div onClick={() => fileInputRef.current?.click()} className="h-full w-full flex flex-col items-center justify-center cursor-pointer space-y-4">
-                <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mx-auto text-white/20 text-xl">+</div>
-                <p className="text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold">Upload Media</p>
-                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
+              <div onClick={() => fileInputRef.current?.click()} className=\"h-full w-full flex flex-col items-center justify-center cursor-pointer space-y-4\">
+                <div className=\"w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mx-auto text-white/20 text-xl\">+</div>
+                <p className=\"text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold\">Upload Media</p>
+                <input type=\"file\" ref={fileInputRef} onChange={handleFileUpload} className=\"hidden\" accept=\"video/*\" />
               </div>
             )}
           </div>

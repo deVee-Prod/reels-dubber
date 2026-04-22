@@ -20,77 +20,119 @@ export default function Home() {
   const [globalOffset, setGlobalOffset] = useState(0); 
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null); 
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null); // מנגן את הסאונד
   const subtitleRef = useRef<HTMLSpanElement>(null); 
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
+  
+  // Ghost Video - וידאו שחי רק בזיכרון ולא ב-DOM
+  const videoObjRef = useRef<HTMLVideoElement | null>(null);
 
-  const syncSubtitles = () => {
-    if (videoRef.current && subtitleRef.current && transcription.length > 0) {
-      const time = videoRef.current.currentTime + globalOffset;
-      setCurrentTime(videoRef.current.currentTime);
-      const wordObj = transcription.find(w => time >= w.start && time <= w.end);
-      if (wordObj) {
-        if (lastWordRef.current !== wordObj.word + wordObj.start) {
-          subtitleRef.current.innerText = wordObj.word;
-          subtitleRef.current.style.display = "inline-block";
-          const index = transcription.findIndex(w => w.start === wordObj.start);
-          const sizes = [28, 42, 58];
-          const dynamicSize = sizes[index % 3] * fontScale;
-          subtitleRef.current.style.fontSize = `${dynamicSize}px`;
-          lastWordRef.current = wordObj.word + wordObj.start;
+  // לולאת הציור והסנכרון המרכזית
+  const syncAndDraw = () => {
+    const video = videoObjRef.current;
+    const audio = audioRef.current;
+    const canvas = canvasRef.current;
+    
+    if (video && audio && canvas) {
+      // 1. ציור הפריים לקנבס
+      if (!video.paused && !video.ended) {
+         const ctx = canvas.getContext('2d');
+         if (ctx && video.videoWidth > 0) {
+           if (canvas.width !== video.videoWidth) {
+             canvas.width = video.videoWidth;
+             canvas.height = video.videoHeight;
+           }
+           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+         }
+         
+         // iOS Optimization: הבטחה שהוידאו הוירטואלי והאודיו מסונכרנים
+         if (Math.abs(video.currentTime - audio.currentTime) > 0.2) {
+            video.currentTime = audio.currentTime;
+         }
+      }
+
+      // 2. סנכרון הכתוביות לפי זמן האודיו האמיתי
+      if (subtitleRef.current && transcription.length > 0) {
+        const time = audio.currentTime + globalOffset;
+        setCurrentTime(audio.currentTime);
+        const wordObj = transcription.find(w => time >= w.start && time <= w.end);
+        
+        if (wordObj) {
+          if (lastWordRef.current !== wordObj.word + wordObj.start) {
+            subtitleRef.current.innerText = wordObj.word;
+            subtitleRef.current.style.display = "inline-block";
+            const index = transcription.findIndex(w => w.start === wordObj.start);
+            const sizes = [28, 42, 58];
+            const dynamicSize = sizes[index % 3] * fontScale;
+            subtitleRef.current.style.fontSize = `${dynamicSize}px`;
+            lastWordRef.current = wordObj.word + wordObj.start;
+          }
+        } else {
+          subtitleRef.current.style.display = "none";
+          lastWordRef.current = "";
         }
-      } else {
-        subtitleRef.current.style.display = "none";
-        lastWordRef.current = "";
       }
     }
-    requestRef.current = requestAnimationFrame(syncSubtitles);
+    requestRef.current = requestAnimationFrame(syncAndDraw);
   };
 
   useEffect(() => {
-    requestRef.current = requestAnimationFrame(syncSubtitles);
+    requestRef.current = requestAnimationFrame(syncAndDraw);
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [transcription, fontScale, globalOffset]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !videoPreview) return;
-
-    video.muted = true;
-    video.defaultMuted = true;
-    video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', 'true');
-    video.load();
-
-    const handleFullscreen = (e: any) => { e.preventDefault(); return false; };
-    video.addEventListener('webkitbeginfullscreen', handleFullscreen, false);
-    return () => video.removeEventListener('webkitbeginfullscreen', handleFullscreen);
-  }, [videoPreview]);
-
+  // טיפול בעריכת המדיה והמרתה ל-Ghost Player
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
     if (uploadedFile) {
       setFile(uploadedFile);
       
-      // הטכניקה לעקיפת ה-Blob המקורי של iOS
+      // המרה ל-Blob כדי לעקוף שגיאות סטרימינג מקומיות ב-iOS
       const buffer = await uploadedFile.arrayBuffer();
       const blob = new Blob([buffer], { type: 'video/mp4' }); 
       const url = URL.createObjectURL(blob);
       
       setVideoPreview(url);
       setTranscription([]); 
+
+      // יצירת הוידאו הוירטואלי (ללא הכנסה ל-DOM)
+      const video = document.createElement('video');
+      video.src = url;
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playsInline = true;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
+      
+      // ציור הפריים הראשון ברגע שהסרטון נטען בזיכרון
+      video.addEventListener('loadeddata', () => {
+        const ctx = canvasRef.current?.getContext('2d');
+        if (ctx && canvasRef.current && video.videoWidth > 0) {
+           canvasRef.current.width = video.videoWidth;
+           canvasRef.current.height = video.videoHeight;
+           ctx.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
+        }
+      });
+
+      video.load();
+      videoObjRef.current = video;
     }
   };
 
   const togglePlay = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) {
+    const video = videoObjRef.current;
+    const audio = audioRef.current;
+    if (!video || !audio) return;
+
+    if (audio.paused) {
       video.play().catch(() => {});
+      audio.play().catch(() => {});
     } else {
       video.pause();
+      audio.pause();
     }
   };
 
@@ -147,7 +189,7 @@ export default function Home() {
     const startPos = subtitlePos;
     const onMove = (moveEvent: any) => {
       const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
-      const delta = ((startY - currentY) / (videoRef.current?.clientHeight || 500)) * 100;
+      const delta = ((startY - currentY) / (canvasRef.current?.clientHeight || 500)) * 100;
       setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
     };
     const onEnd = () => {
@@ -193,7 +235,7 @@ export default function Home() {
 
   if (!authorized) {
     return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8 text-center">
         <Image src="/logo.png" alt="deVee" width={100} height={32} className="mb-8" />
         <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl w-full max-w-[340px]">
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
@@ -216,15 +258,24 @@ export default function Home() {
           <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full">
-                <video ref={videoRef} src={videoPreview} playsInline muted className="w-full h-full object-contain pointer-events-none" />
-                <div className="absolute inset-0 z-20 bg-transparent cursor-pointer" onClick={togglePlay} />
+                
+                {/* אין תגית וידאו! רק אודיו נסתר שמריץ את הסאונד */}
+                <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline />
+                
+                {/* הקנבס שמציג את הפריים מהזיכרון */}
+                <canvas 
+                  ref={canvasRef} 
+                  className="w-full h-full object-contain cursor-pointer" 
+                  onClick={togglePlay} 
+                />
+
                 <div 
                   className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none z-30"
                   style={{ bottom: `${subtitlePos}%` }}
                   onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }}
                   onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
                 >
-                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter" style={{ fontFamily: 'Heebo, sans-serif', display: 'none', pointerEvents: 'none' }} />
+                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'Heebo, sans-serif', display: 'none' }} />
                 </div>
               </div>
             ) : (
@@ -244,9 +295,9 @@ export default function Home() {
             <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
               <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Sync</span>
               <div className="flex items-center space-x-3">
-                <button onClick={() => setGlobalOffset(prev => prev - 0.05)} className="w-6 h-6 rounded-full bg-white/5">-</button>
+                <button onClick={() => setGlobalOffset(prev => prev - 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">-</button>
                 <span className="text-[8px] font-mono text-[#A855F7]">{globalOffset.toFixed(2)}s</span>
-                <button onClick={() => setGlobalOffset(prev => prev + 0.05)} className="w-6 h-6 rounded-full bg-white/5">+</button>
+                <button onClick={() => setGlobalOffset(prev => prev + 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">+</button>
               </div>
             </div>
           </div>

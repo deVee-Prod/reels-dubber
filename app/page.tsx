@@ -122,19 +122,28 @@ export default function Home() {
     setTranscription(updated);
   };
 
-  const startDragging = (e: React.MouseEvent) => {
-    const startY = e.clientY;
+  const startDragging = (e: any) => {
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const startY = clientY;
     const startPos = subtitlePos;
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const delta = ((startY - moveEvent.clientY) / (videoRef.current?.clientHeight || 500)) * 100;
+
+    const onMove = (moveEvent: any) => {
+      const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
+      const delta = ((startY - currentY) / (videoRef.current?.clientHeight || 500)) * 100;
       setSubtitlePos(Math.min(90, Math.max(10, startPos + delta)));
     };
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
+
+    const onEnd = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
     };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,7 +185,7 @@ export default function Home() {
         <div className="w-full max-w-[340px] space-y-8">
           <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
           <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl">
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px]" placeholder="ACCESS KEY" />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
             <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
           </form>
         </div>
@@ -195,18 +204,21 @@ export default function Home() {
         <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl">
           {videoPreview ? (
             <div className="relative w-full h-full">
+              {/* מאפיינים קריטיים למניעת Fullscreen במובייל */}
               <video 
                 ref={videoRef} 
                 src={videoPreview} 
                 controls 
                 playsInline
                 webkit-playsinline="true"
+                x5-playsinline="true"
                 className="w-full h-full object-contain" 
               />
               <div 
                 className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none"
                 style={{ bottom: `${subtitlePos}%` }}
                 onMouseDown={startDragging}
+                onTouchStart={startDragging}
               >
                 <span 
                   ref={subtitleRef}
@@ -215,7 +227,8 @@ export default function Home() {
                     fontFamily: 'Heebo, sans-serif', 
                     display: 'none',
                     paintOrder: 'stroke fill',
-                    WebkitTextStroke: '1px rgba(0,0,0,0.3)'
+                    WebkitTextStroke: '1px rgba(0,0,0,0.3)',
+                    pointerEvents: 'none'
                   }}
                 />
               </div>

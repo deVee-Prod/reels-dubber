@@ -99,12 +99,24 @@ export default function Home() {
     setTranscription(updated);
   };
 
-  // סנכרון עם אופסט עדין של 0.08
   const getCurrentWord = () => {
     if (transcription.length === 0) return null;
-    const offset = 0.08; 
+    const offset = 0.01; 
     const time = currentTime + offset;
     return transcription.find(w => time >= w.start && time <= w.end);
+  };
+
+  // פונקציית הקסם של הגדלים המשתנים
+  const getDynamicFontSize = () => {
+    if (!currentWord || transcription.length === 0) return 'text-3xl';
+    const index = transcription.findIndex(w => w.start === currentWord.start);
+    const cycle = index % 3; 
+    switch(cycle) {
+      case 0: return 'text-2xl'; // מה (קטן)
+      case 1: return 'text-4xl'; // קורה (בינוני)
+      case 2: return 'text-6xl'; // חברים (גדול)
+      default: return 'text-3xl';
+    }
   };
 
   const startDragging = (e: React.MouseEvent) => {
@@ -199,7 +211,6 @@ export default function Home() {
                 controls 
                 className="w-full h-full object-contain"
               />
-              {/* מכולת כתוביות עם גרירה ואנימציית קפיצה */}
               <div 
                 className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none"
                 style={{ bottom: `${subtitlePos}%` }}
@@ -208,8 +219,13 @@ export default function Home() {
                  {currentWord && (
                    <span 
                     key={`${currentWord.word}-${currentWord.start}`} 
-                    className="text-white text-3xl font-black drop-shadow-[0_4px_12px_rgba(0,0,0,1)] uppercase tracking-tight animate-subtitle-jump" 
-                    style={{ fontFamily: 'Heebo, sans-serif', display: 'inline-block' }}
+                    className={`text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter animate-word-pop ${getDynamicFontSize()}`} 
+                    style={{ 
+                      fontFamily: 'Heebo, sans-serif', 
+                      display: 'inline-block',
+                      paintOrder: 'stroke fill',
+                      WebkitTextStroke: '1px rgba(0,0,0,0.3)'
+                    }}
                    >
                      {currentWord.word}
                    </span>
@@ -225,7 +241,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Timeline */}
         <div className="space-y-3">
           <div className="flex justify-between px-2 text-[7px] uppercase tracking-[0.3em] font-bold">
             <span className="text-white/20">Monitor</span>

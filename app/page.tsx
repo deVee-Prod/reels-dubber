@@ -283,9 +283,9 @@ export default function Home() {
         '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-crf', '32', 
-        '-c:a', 'aac',
+        '-preset', 'veryfast', // נותן מהירות עבודה טובה בלי להקריב איכות ב-CRF נמוך
+        '-crf', '17',          // הרמה הכי גבוהה לשמירה על איכות המקור
+        '-c:a', 'copy',        // שומר על הסאונד המקורי בדיוק כמו שהוא (חשוב לך כיוצר!)
         outputPath
       ]);
 

@@ -122,19 +122,25 @@ export default function Home() {
     }
   };
 
-  const togglePlay = () => {
-    const video = videoObjRef.current;
-    const audio = audioRef.current;
-    if (!video || !audio) return;
+  const togglePlay = async () => {
+  const video = videoRef.current;
+  if (!video) return;
 
-    if (audio.paused) {
-      video.play().catch(() => {});
-      audio.play().catch(() => {});
-    } else {
-      video.pause();
-      audio.pause();
+  if (video.paused) {
+    // הגדרה אגרסיבית רגע לפני הנגינה
+    video.muted = true;
+    video.setAttribute('playsinline', 'true');
+    video.setAttribute('webkit-playsinline', 'true');
+    
+    try {
+      await video.play();
+    } catch (err) {
+      console.error("Playback failed", err);
     }
-  };
+  } else {
+    video.pause();
+  }
+};
 
   const loadFFmpeg = async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');

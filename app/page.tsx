@@ -111,6 +111,8 @@ export default function Home() {
       video.src = url;
       video.muted = true;
       video.playsInline = true;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
       
       video.addEventListener('loadeddata', () => {
         const ctx = canvasRef.current?.getContext('2d');
@@ -135,7 +137,9 @@ export default function Home() {
         await video.play();
         await audio.play();
         setIsPlaying(true);
-      } catch (err) { console.error(err); }
+      } catch (err) {
+        console.error("Playback failed", err);
+      }
     } else {
       video.pause();
       audio.pause();
@@ -148,21 +152,32 @@ export default function Home() {
     setCurrentTime(newTime);
     if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
     if (audioRef.current) audioRef.current.currentTime = newTime;
+    if (videoObjRef.current && canvasRef.current && (!isPlaying || audioRef.current?.paused)) {
+       const ctx = canvasRef.current.getContext('2d');
+       if (ctx) ctx.drawImage(videoObjRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+    }
   };
 
   const loadFFmpeg = async () => {
-    const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-    const { toBlobURL } = await import('@ffmpeg/util');
-    const ffmpeg = new FFmpeg();
-    ffmpegRef.current = ffmpeg;
-    ffmpeg.on('progress', ({ progress }) => setExportProgress(Math.round(progress * 100)));
-    
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-    setFfmpegLoaded(true);
+    try {
+      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+      const { toBlobURL } = await import('@ffmpeg/util');
+      const ffmpeg = new FFmpeg();
+      ffmpegRef.current = ffmpeg;
+      
+      ffmpeg.on('progress', ({ progress }) => {
+        setExportProgress(Math.round(progress * 100));
+      });
+
+      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      });
+      setFfmpegLoaded(true);
+    } catch (err) {
+      console.error("FFmpeg Load Error:", err);
+    }
   };
 
   useEffect(() => {
@@ -179,21 +194,26 @@ export default function Home() {
     const { fetchFile } = await import('@ffmpeg/util');
     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
     try {
-      await ffmpeg.writeFile('input_temp', await fetchFile(file));
-      await ffmpeg.exec(['-i', 'input_temp', '-vn', '-ab', '128k', 'output.mp3']);
-      const data = await ffmpeg.readFile('output.mp3');
+      await ffmpeg.writeFile(`temp_input.${ext}`, await fetchFile(file));
+      await ffmpeg.exec(['-i', `temp_input.${ext}`, '-vn', '-ab', '128k', 'output_audio.mp3']);
+      const data = await ffmpeg.readFile('output_audio.mp3');
       const audioBlob = new Blob([data as any], { type: 'audio/mp3' });
       const formData = new FormData();
       formData.append('audio', audioBlob);
       const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
       const result = await response.json();
+      
       if (result.transcription) {
         const allWords = Array.isArray(result.transcription[0]?.words) 
           ? result.transcription[0].words 
           : result.transcription.flatMap((t: any) => t.words);
         setTranscription(allWords);
       }
-    } catch (error) { console.error(error); } finally { setIsDubbing(false); }
+    } catch (error: any) {
+      alert(`Error in DUB: ${error.message}`);
+    } finally {
+      setIsDubbing(false);
+    }
   };
 
   const exportVideo = async (withSubtitles: boolean) => {
@@ -205,7 +225,10 @@ export default function Home() {
 
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
-      await ffmpeg.writeFile('input_final', await fetchFile(file));
+      const inputPath = `input_${Date.now()}.${ext}`;
+      const outputPath = `output_${Date.now()}.${ext}`;
+
+      await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
 
@@ -218,32 +241,42 @@ export default function Home() {
           const startT = Math.max(0, item.start + globalOffset);
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
+          
+          // צריבה בטוחה ללא פונט חיצוני
           return `drawtext=text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }
 
-      await ffmpeg.exec([
-        '-i', 'input_final',
+      const result = await ffmpeg.exec([
+        '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
-        '-crf', '32', // קצת פחות איכות אבל הרבה יותר יציב
+        '-crf', '32', 
         '-c:a', 'aac',
-        '-y',
-        'output_final.mp4'
+        outputPath
       ]);
 
-      const data = await ffmpeg.readFile('output_final.mp4');
-      const videoBlob = new Blob([data as any], { type: 'video/mp4' });
+      if (result !== 0) throw new Error("Encoding failed");
+
+      const data = await ffmpeg.readFile(outputPath);
+      const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
       const downloadUrl = URL.createObjectURL(videoBlob);
+
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_Export_${Date.now()}.mp4`;
+      a.download = `deVee_Export_${Date.now()}.${ext}`;
+      document.body.appendChild(a);
       a.click();
-    } catch (err) {
+      document.body.removeChild(a);
+
+      await ffmpeg.deleteFile(inputPath);
+      await ffmpeg.deleteFile(outputPath);
+
+    } catch (err: any) {
       console.error("Export failed:", err);
-      alert("Export failed - check memory settings");
+      alert("הייצוא נכשל: " + err.message);
     } finally {
       setIsExporting(false);
       setExportProgress(0);
@@ -265,6 +298,7 @@ export default function Home() {
       } else {
         setLoginError(true);
         setPassword('');
+        setTimeout(() => setLoginError(false), 2000);
       }
     } catch (err) { console.error(err); } finally { setLoginLoading(false); }
   };
@@ -336,13 +370,21 @@ export default function Home() {
                   </div>
                 )}
 
+                {!isPlaying && !isExporting && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity">
+                    <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 shadow-2xl">
+                      <div className="w-0 h-0 border-t-[12px] border-t-transparent border-l-[22px] border-l-white border-b-[12px] border-b-transparent ml-2" />
+                    </div>
+                  </div>
+                )}
+
                 <div 
                   className="absolute left-0 right-0 flex justify-center px-6 text-center select-none z-30 cursor-ns-resize active:cursor-grabbing" 
                   style={{ bottom: `${subtitlePos}%` }} 
                   onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }} 
                   onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
                 >
-                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ display: 'none' }} />
+                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'sans-serif', display: 'none' }} />
                 </div>
               </div>
             ) : (
@@ -354,11 +396,74 @@ export default function Home() {
             )}
           </div>
 
+          {videoPreview && (
+             <div className="flex flex-col gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 shadow-inner">
+               <div className="flex items-center justify-between px-2">
+                 <button onClick={togglePlay} className="w-12 h-12 rounded-full bg-[#A855F7]/10 border border-[#A855F7]/20 flex items-center justify-center hover:bg-[#A855F7]/20 transition-all active:scale-95">
+                    {isPlaying ? (
+                      <div className="flex gap-1.5">
+                        <div className="w-1.5 h-4 bg-[#A855F7] rounded-full"></div>
+                        <div className="w-1.5 h-4 bg-[#A855F7] rounded-full"></div>
+                      </div>
+                    ) : (
+                      <div className="w-0 h-0 border-t-[7px] border-t-transparent border-l-[12px] border-l-[#A855F7] border-b-[7px] border-b-transparent ml-1"></div>
+                    )}
+                 </button>
+                 <div className="flex gap-2 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                    <span className="text-white bg-white/5 px-2 py-1 rounded-md">{formatTime(currentTime)}</span>
+                    <span className="py-1">/</span>
+                    <span className="py-1">{formatTime(duration)}</span>
+                 </div>
+               </div>
+               <div className="px-2">
+                 <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="w-full h-1.5 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer" />
+               </div>
+             </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+              <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
+              <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7]" />
+            </div>
+            <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+              <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Sync</span>
+              <div className="flex items-center space-x-3">
+                <button onClick={() => setGlobalOffset(prev => prev - 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">-</button>
+                <span className="text-[8px] font-mono text-[#A855F7]">{globalOffset.toFixed(2)}s</span>
+                <button onClick={() => setGlobalOffset(prev => prev + 0.05)} className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 transition-colors">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div className="h-24 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 flex gap-3 items-center overflow-x-auto no-scrollbar">
+            {transcription.length > 0 ? (
+              transcription.map((item, i) => (
+                <div key={i} className={`h-full min-w-[110px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${currentTime >= item.start && currentTime <= item.end ? 'bg-[#A855F7]/30 border-[#A855F7]' : 'bg-white/[0.02] border-white/5'}`}>
+                  <input value={item.word} onChange={(e) => {
+                     const updated = [...transcription];
+                     updated[i].word = e.target.value;
+                     setTranscription(updated);
+                  }} className="bg-transparent border-none outline-none text-[11px] text-white font-bold text-center w-full focus:text-[#A855F7]" />
+                  <button onClick={() => { const updated = transcription.filter((_, idx) => idx !== i); setTranscription(updated); }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/50 rounded-full text-[8px] flex items-center justify-center hover:bg-red-500 transition-colors">✕</button>
+                </div>
+              ))
+            ) : (
+              <div className="w-full text-center text-[8px] uppercase tracking-[0.3em] text-white/10 font-bold">Waiting for Dub...</div>
+            )}
+          </div>
+
           <div className="flex flex-col gap-4">
-             <div className="flex justify-center gap-4">
+            <div className="flex justify-center gap-4">
               <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`flex-1 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}>
                 {isDubbing ? 'Syncing...' : '1. DUB!'}
               </button>
+              
+              {file && transcription.length === 0 && !isDubbing && (
+                <button onClick={() => exportVideo(false)} disabled={isExporting} className="px-8 py-4 border border-white/10 rounded-full uppercase tracking-[0.4em] text-[8px] font-bold text-white/40 hover:bg-white/5 transition-all">
+                  Test Export
+                </button>
+              )}
             </div>
 
             {transcription.length > 0 && (

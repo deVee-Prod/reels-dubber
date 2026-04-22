@@ -164,10 +164,6 @@ export default function Home() {
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
 
-    ffmpeg.on('log', ({ message }) => {
-      console.log('[FFmpeg Log]', message); // יעזור לנו לראות שגיאות אם יהיו
-    });
-
     ffmpeg.on('progress', ({ progress }) => {
       setExportProgress(Math.round(progress * 100));
     });
@@ -224,61 +220,44 @@ export default function Home() {
 
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
-      const inputPath = `input.${ext}`;
-      const outputPath = `output.${ext}`;
+      const inputPath = `input_${Date.now()}.${ext}`;
+      const outputPath = `output_${Date.now()}.${ext}`;
 
+      // כתיבת הווידאו
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
 
       if (withSubtitles && transcription.length > 0) {
-        try {
-          // משיכת הפונט בצורה אבסולוטית וישירה תוך עקיפת קאש
-          const fontUrl = new URL(`/heebo.ttf?v=${Date.now()}`, window.location.origin).href;
-          await ffmpeg.writeFile('heebo.ttf', await fetchFile(fontUrl));
-        } catch (fontErr) {
-          console.error("Failed to load font file", fontErr);
-          alert("שגיאה בטעינת הפונט. וודא שקובץ heebo.ttf קיים.");
-          setIsExporting(false);
-          return;
-        }
+        // טעינת הפונט עם שם ייחודי למניעת קריסה
+        const fontUrl = `/heebo.ttf?v=${Date.now()}`;
+        const fontData = await fetch(fontUrl).then(res => res.arrayBuffer());
+        await ffmpeg.writeFile('export_font.ttf', new Uint8Array(fontData));
 
         const subtitleFilters = transcription.map((item, index) => {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
           const fontSize = Math.round(baseSize * 1.5); 
-          
-          // ניקוי עמוק מכל תו שיכול לרסק את FFmpeg
-          let safeWord = item.word
-            .replace(/\\/g, "\\\\") 
-            .replace(/'/g, "")
-            .replace(/:/g, "\\:")
-            .replace(/,/g, "\\,")
-            .replace(/%/g, "\\%");
-            
+          let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
           safeWord = fixRTL(safeWord);
-          
           const startT = Math.max(0, item.start + globalOffset);
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
-          
-          // FFmpeg חייב את הפונט הזה, אחרת הוא קורס
-          return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+          return `drawtext=fontfile='export_font.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
-        
         filterChain += `,${subtitleFilters.join(',')}`;
       }
 
-      const ret = await ffmpeg.exec([
+      const result = await ffmpeg.exec([
         '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
+        '-crf', '28', // דחיסה קלה כדי למנוע קריסת זיכרון
         '-c:a', 'aac',
-        '-b:a', '128k',
         outputPath
       ]);
 
-      if (ret !== 0) throw new Error("FFmpeg encoding failed during execution");
+      if (result !== 0) throw new Error("Encoding failed");
 
       const data = await ffmpeg.readFile(outputPath);
       const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
@@ -286,14 +265,18 @@ export default function Home() {
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_${withSubtitles ? 'DUB' : 'CLEAN'}_${Date.now()}.${ext}`;
+      a.download = `deVee_Export.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
 
+      // ניקוי זיכרון
+      await ffmpeg.deleteFile(inputPath);
+      await ffmpeg.deleteFile(outputPath);
+
     } catch (err) {
       console.error("Export failed:", err);
-      alert("הייצוא נכשל. פתח את הקונסול כדי לראות את השגיאה המלאה.");
+      alert("ייצוא נכשל. נסה לרענן את הדף ולהעלות את הסרטון מחדש.");
     } finally {
       setIsExporting(false);
       setExportProgress(0);
@@ -433,7 +416,7 @@ export default function Home() {
                  </div>
                </div>
                <div className="px-2">
-                 <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="w-full h-1.5 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(168,85,247,0.5)] cursor-pointer" />
+                 <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="w-full h-1.5 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer" />
                </div>
              </div>
           )}

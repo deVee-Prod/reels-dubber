@@ -163,11 +163,9 @@ export default function Home() {
     const { toBlobURL } = await import('@ffmpeg/util');
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
-
     ffmpeg.on('progress', ({ progress }) => {
       setExportProgress(Math.round(progress * 100));
     });
-
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
@@ -220,19 +218,29 @@ export default function Home() {
 
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
-      const inputPath = `input_${Date.now()}.${ext}`;
-      const outputPath = `output_${Date.now()}.${ext}`;
+      const inputPath = `input.${ext}`;
+      const outputPath = `output.${ext}`;
 
-      // כתיבת הווידאו
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
       let filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`;
 
       if (withSubtitles && transcription.length > 0) {
-        // טעינת הפונט עם שם ייחודי למניעת קריסה
-        const fontUrl = `/heebo.ttf?v=${Date.now()}`;
-        const fontData = await fetch(fontUrl).then(res => res.arrayBuffer());
-        await ffmpeg.writeFile('export_font.ttf', new Uint8Array(fontData));
+        let fontReady = false;
+        try {
+          // גיבוי כפול לפונט - ניסיון מלינק ישיר
+          const fontUrl = "https://github.com/googlefonts/heebo/raw/main/fonts/ttf/Heebo-Black.ttf";
+          const fontBuffer = await fetch(fontUrl).then(res => res.arrayBuffer());
+          await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontBuffer));
+          fontReady = true;
+        } catch (e) {
+          // אם הלינק נכשל, מנסים מהתיקייה המקומית
+          try {
+            const localFont = await fetch('/heebo.ttf').then(res => res.arrayBuffer());
+            await ffmpeg.writeFile('heebo.ttf', new Uint8Array(localFont));
+            fontReady = true;
+          } catch (e2) { console.error("All font loads failed"); }
+        }
 
         const subtitleFilters = transcription.map((item, index) => {
           const baseSize = [28, 42, 58][index % 3] * fontScale;
@@ -242,22 +250,22 @@ export default function Home() {
           const startT = Math.max(0, item.start + globalOffset);
           const endT = Math.max(0, item.end + globalOffset);
           const yPos = `h-(h*${subtitlePos}/100)`;
-          return `drawtext=fontfile='export_font.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+          
+          const fontArg = fontReady ? "fontfile=heebo.ttf:" : "";
+          return `drawtext=${fontArg}text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }
 
-      const result = await ffmpeg.exec([
+      await ffmpeg.exec([
         '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
-        '-crf', '28', // דחיסה קלה כדי למנוע קריסת זיכרון
         '-c:a', 'aac',
+        '-b:a', '128k',
         outputPath
       ]);
-
-      if (result !== 0) throw new Error("Encoding failed");
 
       const data = await ffmpeg.readFile(outputPath);
       const videoBlob = new Blob([data as any], { type: ext === 'mov' ? 'video/quicktime' : 'video/mp4' });
@@ -265,18 +273,14 @@ export default function Home() {
 
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `deVee_Export.${ext}`;
+      a.download = `deVee_${withSubtitles ? 'DUB' : 'CLEAN'}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
 
-      // ניקוי זיכרון
-      await ffmpeg.deleteFile(inputPath);
-      await ffmpeg.deleteFile(outputPath);
-
     } catch (err) {
       console.error("Export failed:", err);
-      alert("ייצוא נכשל. נסה לרענן את הדף ולהעלות את הסרטון מחדש.");
+      alert("Export failed");
     } finally {
       setIsExporting(false);
       setExportProgress(0);
@@ -372,7 +376,7 @@ export default function Home() {
 
                 {!isPlaying && !isExporting && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity">
-                    <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20">
+                    <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 shadow-2xl">
                       <div className="w-0 h-0 border-t-[12px] border-t-transparent border-l-[22px] border-l-white border-b-[12px] border-b-transparent ml-2" />
                     </div>
                   </div>

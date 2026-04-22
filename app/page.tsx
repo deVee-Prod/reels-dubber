@@ -17,7 +17,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0); 
   const [subtitlePos, setSubtitlePos] = useState(25);
   const [fontScale, setFontScale] = useState(1);
-  const [globalOffset, setGlobalOffset] = useState(0); // [חדש] כיוונון סנכרון ידני
+  const [globalOffset, setGlobalOffset] = useState(0); 
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null); 
@@ -28,7 +28,6 @@ export default function Home() {
 
   const syncSubtitles = () => {
     if (videoRef.current && subtitleRef.current && transcription.length > 0) {
-      // הוספת ה-Offset הגלובלי לזמן הנוכחי
       const time = videoRef.current.currentTime + globalOffset;
       setCurrentTime(videoRef.current.currentTime);
 
@@ -61,12 +60,10 @@ export default function Home() {
     };
   }, [transcription, fontScale, globalOffset]);
 
-  // פונקציות עזר לסנכרון
   const adjustOffset = (amount: number) => {
     setGlobalOffset(prev => prev + amount);
   };
 
-  // ... (handleDub, handleFileUpload, handleLogin נשארים זהים)
   const loadFFmpeg = async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
     const { toBlobURL } = await import('@ffmpeg/util');
@@ -198,7 +195,14 @@ export default function Home() {
         <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl">
           {videoPreview ? (
             <div className="relative w-full h-full">
-              <video ref={videoRef} src={videoPreview} controls className="w-full h-full object-contain" />
+              <video 
+                ref={videoRef} 
+                src={videoPreview} 
+                controls 
+                playsInline
+                webkit-playsinline="true"
+                className="w-full h-full object-contain" 
+              />
               <div 
                 className="absolute left-0 right-0 flex justify-center cursor-ns-resize active:cursor-grabbing px-6 text-center select-none"
                 style={{ bottom: `${subtitlePos}%` }}
@@ -218,22 +222,19 @@ export default function Home() {
             </div>
           ) : (
             <div onClick={() => fileInputRef.current?.click()} className="h-full flex flex-col items-center justify-center cursor-pointer space-y-4">
-              <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-white/20 text-xl">+</div>
+              <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mx-auto text-white/20 text-xl">+</div>
               <p className="text-[8px] uppercase tracking-[0.4em] text-white/20 font-bold">Upload Media</p>
               <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="video/*" />
             </div>
           )}
         </div>
 
-        {/* פאנל שליטה משולב: Size + Sync */}
         <div className="grid grid-cols-2 gap-4">
-          {/* Size Slider */}
           <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
             <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
             <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7] h-1 bg-white/10 rounded-full appearance-none cursor-pointer" />
           </div>
 
-          {/* Sync Offset Control */}
           <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
             <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Sync</span>
             <div className="flex items-center space-x-3">
@@ -244,7 +245,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Timeline */}
         <div className="space-y-3">
           <div className="h-24 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 flex gap-3 items-center overflow-x-auto no-scrollbar">
             {transcription.map((item, i) => (

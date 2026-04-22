@@ -182,7 +182,7 @@ export default function Home() {
   if (!authorized) {
     return (
       <main className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8">
-        <div className="w-full max-w-[340px] space-y-8 text-center">
+        <div className="w-full max-w-[340px] space-y-8">
           <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
           <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl">
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
@@ -200,11 +200,10 @@ export default function Home() {
         <p className="text-[10px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
       </header>
 
-      <div className="w-full max-w-2xl space-y-8">
+      <div className="w-full max-w-2xl space-y-8 pb-32">
         <div className="relative aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl">
           {videoPreview ? (
             <div className="relative w-full h-full">
-              {/* המאפיין muted קריטי למובייל כדי למנוע קפיצה לנגן חיצוני */}
               <video 
                 ref={videoRef} 
                 src={videoPreview} 
@@ -243,6 +242,7 @@ export default function Home() {
           )}
         </div>
 
+        {/* Sync & Size Panel */}
         <div className="grid grid-cols-2 gap-4">
           <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
             <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
@@ -259,6 +259,7 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Neural Timeline */}
         <div className="space-y-3">
           <div className="h-24 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 flex gap-3 items-center overflow-x-auto no-scrollbar">
             {transcription.map((item, i) => (
@@ -271,8 +272,13 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Footer Actions */}
         <div className="flex justify-center pt-4">
-          <button onClick={handleDub} disabled={!file || isDubbing || !ffmpegLoaded} className={`px-16 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_40px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}>
+          <button 
+            onClick={handleDub} 
+            disabled={!file || isDubbing || !ffmpegLoaded} 
+            className={`px-16 py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_40px_rgba(168,85,247,0.3)] hover:scale-105' : 'bg-white/5 text-white/20'}`}
+          >
             {isDubbing ? 'Syncing...' : 'DUB!'}
           </button>
         </div>

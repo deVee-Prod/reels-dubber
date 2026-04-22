@@ -65,15 +65,12 @@ export default function Home() {
             video.currentTime = audio.currentTime;
          }
       }
-
       if (!audio.paused && !audio.ended) {
         setCurrentTime(audio.currentTime);
       }
-
       if (subtitleRef.current && transcription.length > 0) {
         const time = audio.currentTime + globalOffset;
         const wordObj = transcription.find(w => time >= w.start && time <= w.end);
-        
         if (wordObj) {
           if (lastWordRef.current !== wordObj.word + wordObj.start) {
             subtitleRef.current.innerText = wordObj.word;
@@ -126,7 +123,6 @@ export default function Home() {
            ctx.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
         }
       });
-
       video.load();
       videoObjRef.current = video;
     }
@@ -136,7 +132,6 @@ export default function Home() {
     const video = videoObjRef.current;
     const audio = audioRef.current;
     if (!video || !audio) return;
-
     if (audio.paused) {
       video.muted = true;
       try {
@@ -158,7 +153,6 @@ export default function Home() {
     setCurrentTime(newTime);
     if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
     if (audioRef.current) audioRef.current.currentTime = newTime;
-    
     if (videoObjRef.current && canvasRef.current && (!isPlaying || audioRef.current?.paused)) {
        const ctx = canvasRef.current.getContext('2d');
        if (ctx) ctx.drawImage(videoObjRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -224,16 +218,14 @@ export default function Home() {
       const inputPath = `input.${ext}`;
       const outputPath = `output.${ext}`;
 
-      // 1. כתיבת הקובץ המקורי לזיכרון ה-WASM
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
-      // 2. הורדה וצריבה של הפונט Heebo Black - שימוש ב-CDN יציב
-      const fontUrl = 'https://fonts.gstatic.com/s/heebo/v26/NGSpv5_7ad-LveS51KzS6A.ttf';
-      const fontRes = await fetch(fontUrl);
+      // משיכת הפונט המקומית מהתיקייה שלך
+      const fontRes = await fetch('/heebo.ttf');
+      if (!fontRes.ok) throw new Error("Font file not found in public folder");
       const fontData = await fontRes.arrayBuffer();
-      await ffmpeg.writeFile('heeboblack.ttf', new Uint8Array(fontData));
+      await ffmpeg.writeFile('heebo.ttf', new Uint8Array(fontData));
 
-      // 3. בניית הכתוביות עם הפונט הנטען
       const subtitleFilters = transcription.map((item, index) => {
         const baseSize = [28, 42, 58][index % 3] * fontScale;
         const fontSize = Math.round(baseSize * 1.5); 
@@ -242,14 +234,11 @@ export default function Home() {
         const startT = Math.max(0, item.start + globalOffset);
         const endT = Math.max(0, item.end + globalOffset);
         const yPos = `h-(h*${subtitlePos}/100)`;
-        
-        // הגדרה מפורשת של ה-fontfile לנתיב המקומי בזיכרון
-        return `drawtext=fontfile=heeboblack.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
+        return `drawtext=fontfile=heebo.ttf:text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=4:shadowcolor=black@0.5:shadowx=2:shadowy=2`;
       });
 
       const filterChain = `scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p,${subtitleFilters.join(',')}`;
 
-      // 4. הרצת הפקודה
       const ret = await ffmpeg.exec([
         '-i', inputPath,
         '-vf', filterChain,
@@ -275,7 +264,7 @@ export default function Home() {
 
     } catch (err) {
       console.error("Export failed:", err);
-      alert("ייצוא נכשל - נסה שוב או בדוק את הקובץ");
+      alert("ייצוא נכשל - וודא שקובץ heebo.ttf נמצא בתיקיית public");
     } finally {
       setIsExporting(false);
     }

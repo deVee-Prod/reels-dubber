@@ -355,10 +355,10 @@ export default function Home() {
   };
 
   const LabelFooter = () => (
-    <footer className="w-full py-12 flex flex-col items-center space-y-4 opacity-40 mt-auto">
+    <footer className="w-full py-12 flex flex-col items-center space-y-4 mt-auto">
       <p className="text-[10px] tracking-[0.2em] font-medium text-white/60">Powered By deVee Boutique Label</p>
-      <div className="w-12 h-12 overflow-hidden">
-         <Image src="/label_logo.jpg" alt="deVee Label" width={48} height={48} className="object-cover scale-110" />
+      <div className="w-12 h-12 rounded-full overflow-hidden">
+         <Image src="/label_logo.jpg" alt="deVee Label" width={48} height={48} className="object-cover" />
       </div>
     </footer>
   );
@@ -366,10 +366,19 @@ export default function Home() {
   if (!authorized) {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col items-center p-8 text-center">
-        <Image src="/logo.png" alt="deVee" width={100} height={32} className="mb-8" />
+        <header className="space-y-2 mb-8">
+          <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
+          <p className="text-[9px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
+        </header>
         <div className="flex-1 flex flex-col justify-center w-full max-w-[340px]">
           <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl w-full">
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[11px] focus:outline-none" placeholder="ACCESS KEY" />
+            <input 
+              type="password" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-white text-center tracking-[0.4em] text-[9px] focus:outline-none placeholder:text-[9px]" 
+              placeholder="ACCESS KEY" 
+            />
             <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
           </form>
         </div>

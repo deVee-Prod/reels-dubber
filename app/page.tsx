@@ -270,9 +270,9 @@ export default function Home() {
           }
           
           const yPos = `h-(h*${subtitlePos}/100)-text_h`;
-          const borderW = Math.max(0.5, 0.8 * scaleRatio); 
+          const borderW = Math.max(3, 2.5 * scaleRatio);
 
-          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black@0.3:borderw=${borderW}`;
+          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=${borderW}`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }

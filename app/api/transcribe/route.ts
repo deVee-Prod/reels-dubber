@@ -6,6 +6,12 @@ const openai = new OpenAI({
 });
 
 export async function POST(req: Request) {
+  // בדיקת cookie — בלי cookie אין גישה
+  const cookie = req.headers.get('cookie') || '';
+  if (!cookie.includes('session_access')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const formData = await req.formData();
     const audioBlob = formData.get('audio') as Blob;

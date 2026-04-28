@@ -281,8 +281,8 @@ export default function Home() {
         '-i', inputPath,
         '-vf', filterChain,
         '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-crf', '17',
+        '-preset', 'ultrafast',
+        '-crf', '23',
         '-c:a', 'copy',
         outputPath
       ]);

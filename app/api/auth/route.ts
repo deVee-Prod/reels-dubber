@@ -9,7 +9,7 @@ export async function POST(request: Request) {
       const response = NextResponse.json({ success: true });
       
       // הגדרות עוגייה קשיחות ל-Vercel 2026
-      response.cookies.set('session_access', password, {
+      response.cookies.set('session_access', 'granted', {
   httpOnly: true,
   secure: true, 
   sameSite: 'lax',

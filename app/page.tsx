@@ -366,8 +366,9 @@ export default function Home() {
   if (!authorized) {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col items-center text-center">
-        <header className="space-y-2 pt-8 pb-6">
-          <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
+        <header className="space-y-2 pt-8 pb-6 relative">
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 w-56 h-20 bg-[#A855F7] blur-[55px] opacity-[0.25] pointer-events-none" />
+          <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto relative" />
           <p className="text-[9px] tracking-[0.3em] text-white/70 font-bold uppercase">REELS DUBBER</p>
         </header>
         <main className="flex-1 flex flex-col justify-center w-full max-w-[340px] px-4">
@@ -389,8 +390,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center overflow-y-auto overflow-x-hidden">
-      <header className="text-center space-y-2 pt-8 pb-6">
-        <Image src="/logo.png" alt="deVee" width={80} height={26} className="opacity-80 mx-auto" />
+      <header className="text-center space-y-2 pt-8 pb-6 relative">
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 w-56 h-20 bg-[#A855F7] blur-[55px] opacity-[0.25] pointer-events-none" />
+        <Image src="/logo.png" alt="deVee" width={80} height={26} className="opacity-80 mx-auto relative" />
         <p className="text-[9px] tracking-[0.3em] text-white/70 font-bold uppercase">REELS DUBBER</p>
       </header>
 

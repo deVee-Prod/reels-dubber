@@ -365,12 +365,12 @@ export default function Home() {
 
   if (!authorized) {
     return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center p-8 text-center">
-        <header className="space-y-2 mb-8">
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center text-center">
+        <header className="space-y-2 pt-8 pb-6">
           <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
           <p className="text-[9px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
         </header>
-        <div className="flex-1 flex flex-col justify-center w-full max-w-[340px]">
+        <main className="flex-1 flex flex-col justify-center w-full max-w-[340px] px-4">
           <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl w-full">
             <input 
               type="password" 
@@ -381,7 +381,7 @@ export default function Home() {
             />
             <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
           </form>
-        </div>
+        </main>
         <LabelFooter />
       </div>
     );
@@ -394,7 +394,7 @@ export default function Home() {
         <p className="text-[9px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
       </header>
 
-      <main className="w-full max-w-2xl mx-auto flex flex-col items-center flex-1 px-4 md:px-6 space-y-4 md:space-y-6">
+      <main className="w-full max-w-2xl mx-auto flex flex-col items-center flex-1 justify-center px-4 md:px-6 space-y-4 md:space-y-6 py-6">
         <div className="w-full space-y-4 md:space-y-6">
           <div className="relative w-full h-[40vh] md:h-auto md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (

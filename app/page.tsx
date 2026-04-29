@@ -368,7 +368,7 @@ export default function Home() {
       <div className="min-h-screen bg-[#050505] flex flex-col items-center text-center">
         <header className="space-y-2 pt-8 pb-6">
           <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto" />
-          <p className="text-[9px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
+          <p className="text-[9px] tracking-[0.3em] text-white/70 font-bold uppercase">REELS DUBBER</p>
         </header>
         <main className="flex-1 flex flex-col justify-center w-full max-w-[340px] px-4">
           <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl w-full">
@@ -391,7 +391,7 @@ export default function Home() {
     <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center overflow-y-auto overflow-x-hidden">
       <header className="text-center space-y-2 pt-8 pb-6">
         <Image src="/logo.png" alt="deVee" width={80} height={26} className="opacity-80 mx-auto" />
-        <p className="text-[9px] tracking-[0.3em] text-white/40 font-bold uppercase">REELS DUBBER</p>
+        <p className="text-[9px] tracking-[0.3em] text-white/70 font-bold uppercase">REELS DUBBER</p>
       </header>
 
       <main className="w-full max-w-2xl mx-auto flex flex-col items-center flex-1 justify-center px-4 md:px-6 space-y-4 md:space-y-6 py-6">

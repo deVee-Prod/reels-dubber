@@ -13,6 +13,7 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.105.1",
     "next": "16.2.4",
     "openai": "^6.34.0",
     "react": "19.2.4",

@@ -235,7 +235,7 @@ export default function Home() {
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
       try {
-        const fontUrl = `${window.location.origin}/Heebo.ttf?v=${Date.now()}`;
+        const fontUrl = `${window.location.origin}/NotoSansTight.ttf?v=${Date.now()}`;
         const fontRes = await fetch(fontUrl);
         if (!fontRes.ok) throw new Error("Font fetch failed");
         const fontBuffer = await fontRes.arrayBuffer();
@@ -272,7 +272,7 @@ export default function Home() {
           const yPos = `h-(h*${subtitlePos}/100)-text_h`;
           const borderW = Math.max(1.5, 1.2 * scaleRatio);
 
-          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=white:bordercolor=black:borderw=${borderW}`;
+          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=0xECE9E4:bordercolor=black@0.9:borderw=2:shadowx=0:shadowy=2:shadowcolor=black@0.95:box=1:boxcolor=black@0.18:boxborderw=14`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }

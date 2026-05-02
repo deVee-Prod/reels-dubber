@@ -11,6 +11,7 @@ const formatTime = (time: number) => {
 };
 
 export default function Home() {
+  const [authChecking, setAuthChecking] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState(false);
@@ -173,9 +174,24 @@ export default function Home() {
   };
 
   useEffect(() => {
+    import('./supabaseClient').then(({ supabase }) => {
+      supabase.auth.getSession().then(({ data: { session } }: { data: { session: unknown } }) => {
+        if (session) {
+          setAuthChecking(false);
+        } else {
+          supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.href },
+          });
+        }
+      });
+    });
+  }, []);
+
+  useEffect(() => {
     if (document.cookie.includes('session_access')) {
       setAuthorized(true);
-      loadFFmpeg(); 
+      loadFFmpeg();
     }
   }, []);
 
@@ -362,6 +378,19 @@ export default function Home() {
       </div>
     </footer>
   );
+
+  if (authChecking) {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, backgroundColor: '#000',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <p style={{ color: '#fff', fontSize: '1.125rem', fontFamily: 'sans-serif' }}>
+          Verifying Access to deVee Tools...
+        </p>
+      </div>
+    );
+  }
 
   if (!authorized) {
     return (

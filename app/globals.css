@@ -6,6 +6,10 @@
   --foreground: #ededed;
 }
 
+html {
+  background-color: #050505;
+}
+
 html, body {
   min-height: 100dvh;
   padding-top: env(safe-area-inset-top);

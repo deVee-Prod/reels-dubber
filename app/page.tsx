@@ -399,7 +399,7 @@ export default function Home() {
 
   if (!authorized) {
     return (
-      <div className="min-h-[100dvh] bg-[#050505] flex flex-col items-center text-center">
+      <div className="min-h-[100dvh] bg-[#050505] text-white flex flex-col items-center overflow-y-auto overflow-x-hidden">
         <header className="space-y-2 pt-8 pb-6 relative">
           <div className="absolute top-6 left-1/2 -translate-x-1/2 w-56 h-20 bg-[#A855F7] blur-[55px] opacity-[0.25] pointer-events-none" />
           <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto relative" />

@@ -364,7 +364,7 @@ export default function Home() {
   };
 
   const LabelFooter = () => (
-    <footer className="w-full py-12 flex flex-col items-center space-y-4 mt-auto">
+    <footer className="w-full pt-12 safe-pb flex flex-col items-center space-y-4 mt-auto">
       <p className="text-[10px] tracking-[0.2em] font-medium text-white/60">Powered By deVee Boutique Label</p>
       <div className="w-12 h-12 rounded-full overflow-hidden">
          <Image src="/label_logo.jpg" alt="deVee Label" width={48} height={48} className="object-cover" />
@@ -374,7 +374,7 @@ export default function Home() {
 
   if (authStatus === 'checking') {
     return (
-      <div style={{ position: 'fixed', inset: 0, backgroundColor: '#050505', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ position: 'fixed', inset: 0, backgroundColor: '#050505', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', padding: '2rem', textAlign: 'center' }}>
         <p style={{ color: '#fff', fontSize: '1.125rem', fontFamily: 'sans-serif' }}>Verifying Access...</p>
       </div>
     );
@@ -399,8 +399,8 @@ export default function Home() {
 
   if (!authorized) {
     return (
-      <div className="min-h-[100dvh] bg-[#050505] text-white flex flex-col items-center overflow-y-auto overflow-x-hidden">
-        <header className="space-y-2 pt-8 pb-6 relative">
+      <div className="min-h-[100dvh] w-full bg-[#050505] text-white flex flex-col items-center overflow-y-auto overflow-x-hidden">
+  <header className="w-full text-center space-y-2 safe-pt pb-6 relative">
           <div className="absolute top-6 left-1/2 -translate-x-1/2 w-56 h-20 bg-[#A855F7] blur-[55px] opacity-[0.25] pointer-events-none" />
           <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto relative" />
           <p className="text-[9px] tracking-[0.3em] text-white/70 font-bold uppercase">REELS DUBBER</p>
@@ -431,8 +431,8 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center overflow-y-auto overflow-x-hidden">
-      <header className="text-center space-y-2 pt-14 pb-6 relative">
+  <div className="min-h-[100dvh] w-full bg-[#050505] text-white flex flex-col items-center overflow-y-auto overflow-x-hidden">
+  <header className="w-full text-center space-y-2 safe-pt pb-6 relative">
         <div className="absolute top-6 left-1/2 -translate-x-1/2 w-56 h-20 bg-[#A855F7] blur-[55px] opacity-[0.25] pointer-events-none" />
         <Image src="/logo.png" alt="deVee" width={80} height={26} className="opacity-80 mx-auto relative" />
         <p className="text-[9px] tracking-[0.3em] text-white/70 font-bold uppercase">REELS DUBBER</p>

@@ -94,6 +94,8 @@ export default function Timeline({
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   // Key of the word currently being text-edited, format "chunkIndex-wordIndex"
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  // Ref to the live <input> so we can flush its value before blur fires (mobile e.preventDefault suppresses blur)
+  const editingInputRef = useRef<HTMLInputElement | null>(null);
 
   const safeDuration = Math.max(1, Number.isFinite(duration) ? duration : 0);
   const totalWidth = Math.max(800, Math.ceil(safeDuration * PX_PER_SEC));
@@ -165,7 +167,19 @@ export default function Timeline({
     return Math.max(minT, Math.min(maxT, t));
   }
 
+  // Flush the active text-edit immediately (before blur fires) so no typed text is lost
+  function commitCurrentEdit() {
+    const input = editingInputRef.current;
+    if (!input || !editingKey) return;
+    const [ci, wi] = editingKey.split('-').map(Number);
+    const newText = input.value.trim() || input.defaultValue;
+    if (onWordTextChange) onWordTextChange(ci, wi, newText);
+    setEditingKey(null);
+    editingInputRef.current = null;
+  }
+
   function onEdgePointerDown(e: React.PointerEvent, fw: FlatWord, edge: 'left' | 'right') {
+    commitCurrentEdit();
     e.preventDefault();
     e.stopPropagation();
     setDrag({ fw, edge, startClientX: e.clientX, startClientY: e.clientY });
@@ -174,6 +188,7 @@ export default function Timeline({
   function onBodyPointerDown(e: React.PointerEvent, fw: FlatWord) {
     // Don't start drag while this word is being edited
     if (editingKey === `${fw.chunkIndex}-${fw.wordIndex}`) return;
+    commitCurrentEdit();
     e.preventDefault();
     e.stopPropagation();
     const t0 = pointerXToTime(e.nativeEvent);
@@ -271,6 +286,7 @@ export default function Timeline({
           {/* Ruler — click to seek */}
           <div
             onPointerDown={(e) => {
+              commitCurrentEdit();
               if (!onSeek || !trackRef.current) return;
               const rect = trackRef.current.getBoundingClientRect();
               const x = Math.max(0, e.clientX - rect.left);
@@ -332,6 +348,7 @@ export default function Timeline({
 
                   {isEditing ? (
                     <input
+                      ref={(el) => { editingInputRef.current = el; }}
                       autoFocus
                       defaultValue={fw.word}
                       onBlur={(e) => {

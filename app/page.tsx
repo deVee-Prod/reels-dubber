@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import Timeline from './components/Timeline';
 
@@ -60,6 +60,11 @@ export default function Home() {
   const syncAndDrawRef = useRef<() => void>(() => {});
   // Ref to latest togglePlay so spacebar listener never captures a stale closure
   const togglePlayRef = useRef<() => Promise<void>>(async () => {});
+
+  // Stable callbacks for Timeline — empty deps means same reference every render,
+  // so Timeline's RAF effect never restarts and the playhead loop runs without interruption
+  const getTimeCallback = useCallback(() => currentTimeRef.current, []);
+  const isPlayingCallback = useCallback(() => !!(audioRef.current && !audioRef.current.paused), []);
 
   const syncAndDraw = () => {
     const video = videoObjRef.current;
@@ -620,8 +625,8 @@ export default function Home() {
                 words: transcription.map(item => ({ word: item.word, start: item.start, end: item.end })),
               }]}
               duration={duration}
-              getCurrentTime={() => currentTimeRef.current}
-              isPlaying={() => !!audioRef.current && !audioRef.current.paused}
+              getCurrentTime={getTimeCallback}
+              isPlaying={isPlayingCallback}
               onWordTimingChange={(_chunkIndex, wordIndex, patch) => {
                 setTranscription(prev => prev.map((item, i) =>
                   i === wordIndex ? { ...item, ...patch } : item

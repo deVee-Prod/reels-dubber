@@ -91,6 +91,10 @@ export default function Timeline({
   const playheadRef = useRef<HTMLDivElement>(null);
   const userScrolledAt = useRef(0);
   const rafRef = useRef(0);
+  // Scroll strip refs
+  const scrollTrackRef = useRef<HTMLDivElement>(null);
+  const scrollThumbRef = useRef<HTMLDivElement>(null);
+  const scrollDragRef = useRef<{ startX: number; startScrollLeft: number } | null>(null);
 
   const [drag, setDrag] = useState<DragState | null>(null);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
@@ -149,6 +153,7 @@ export default function Timeline({
           c.scrollLeft = Math.max(0, Math.min(max, target));
         }
       }
+      syncScrollThumb();
       rafRef.current = requestAnimationFrame(tick);
     }
     rafRef.current = requestAnimationFrame(tick);
@@ -291,8 +296,62 @@ export default function Timeline({
     };
   }, [drag, chunks, safeDuration, onWordTimingChange]);
 
+  function syncScrollThumb() {
+    const c = containerRef.current;
+    const track = scrollTrackRef.current;
+    const thumb = scrollThumbRef.current;
+    if (!c || !track || !thumb) return;
+    const trackW = track.clientWidth;
+    if (trackW === 0 || c.scrollWidth === 0) return;
+    const maxScroll = Math.max(0, c.scrollWidth - c.clientWidth);
+    const thumbW = Math.max(28, (c.clientWidth / c.scrollWidth) * trackW);
+    const thumbLeft = maxScroll > 0 ? (c.scrollLeft / maxScroll) * (trackW - thumbW) : 0;
+    thumb.style.width = `${thumbW}px`;
+    thumb.style.transform = `translateX(${thumbLeft}px)`;
+    track.style.opacity = maxScroll > 4 ? '1' : '0';
+  }
+
+  function onScrollbarPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    const c = containerRef.current;
+    const track = scrollTrackRef.current;
+    if (!c || !track) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    const rect = track.getBoundingClientRect();
+    const trackW = rect.width;
+    const thumbW = Math.max(28, (c.clientWidth / Math.max(1, c.scrollWidth)) * trackW);
+    const maxScroll = Math.max(0, c.scrollWidth - c.clientWidth);
+    const clickX = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, (clickX - thumbW / 2) / Math.max(1, trackW - thumbW)));
+    c.scrollLeft = ratio * maxScroll;
+    userScrolledAt.current = performance.now();
+    syncScrollThumb();
+    scrollDragRef.current = { startX: e.clientX, startScrollLeft: c.scrollLeft };
+  }
+
+  function onScrollbarPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = scrollDragRef.current;
+    if (!drag || !(e.buttons & 1)) return;
+    const c = containerRef.current;
+    const track = scrollTrackRef.current;
+    if (!c || !track) return;
+    const trackW = track.clientWidth;
+    const thumbW = Math.max(28, (c.clientWidth / Math.max(1, c.scrollWidth)) * trackW);
+    const maxScroll = Math.max(0, c.scrollWidth - c.clientWidth);
+    const deltaX = e.clientX - drag.startX;
+    const scrollDelta = (deltaX / Math.max(1, trackW - thumbW)) * maxScroll;
+    c.scrollLeft = Math.max(0, Math.min(maxScroll, drag.startScrollLeft + scrollDelta));
+    userScrolledAt.current = performance.now();
+    syncScrollThumb();
+  }
+
+  function onScrollbarPointerUp() {
+    scrollDragRef.current = null;
+  }
+
   function onContainerScroll() {
     userScrolledAt.current = performance.now();
+    syncScrollThumb();
   }
 
   return (
@@ -468,6 +527,23 @@ export default function Timeline({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Horizontal scroll strip — drag to navigate the Timeline on mobile */}
+      <div
+        ref={scrollTrackRef}
+        onPointerDown={onScrollbarPointerDown}
+        onPointerMove={onScrollbarPointerMove}
+        onPointerUp={onScrollbarPointerUp}
+        onPointerCancel={onScrollbarPointerUp}
+        className="relative mt-2 h-5 rounded-full bg-white/[0.05] overflow-hidden cursor-grab active:cursor-grabbing transition-opacity"
+        style={{ touchAction: 'none' }}
+      >
+        <div
+          ref={scrollThumbRef}
+          className="absolute top-1 bottom-1 rounded-full bg-[#A855F7]/50"
+          style={{ width: '28px', willChange: 'transform' }}
+        />
       </div>
     </div>
   );

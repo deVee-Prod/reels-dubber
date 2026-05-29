@@ -251,12 +251,12 @@ export default function Timeline({
           if (e.pointerType === 'touch') {
             const now = Date.now();
             if (now - lastTapTimeRef.current < 400 && selectedKeyRef.current === key) {
-              // double tap → delete
-              onWordDeleteRef.current?.(drag.fw.chunkIndex, drag.fw.wordIndex);
+              // double tap → open text editor
+              setEditingKey(key);
               setSelectedKey(null);
               selectedKeyRef.current = null;
             } else {
-              // single tap → select and show delete badge
+              // single tap → select and show delete badge (use X to delete)
               setSelectedKey(key);
               selectedKeyRef.current = key;
             }

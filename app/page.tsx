@@ -56,6 +56,8 @@ export default function Home() {
   const fontFamilyRef  = useRef<FontId>('NotoSansTight');
   // Tracks current time for both the seek bar and the Timeline (iOS: audio.currentTime lags when paused)
   const currentTimeRef = useRef(0);
+  // Holds the latest syncAndDraw so the RAF loop never runs a stale closure
+  const syncAndDrawRef = useRef<() => void>(() => {});
   // Ref to latest togglePlay so spacebar listener never captures a stale closure
   const togglePlayRef = useRef<() => Promise<void>>(async () => {});
 
@@ -132,13 +134,20 @@ export default function Home() {
         }
       }
     }
-    requestRef.current = requestAnimationFrame(syncAndDraw);
   };
 
+  // Keep ref pointed at the latest syncAndDraw every render so the RAF never uses a stale closure
+  useEffect(() => { syncAndDrawRef.current = syncAndDraw; });
+
+  // RAF loop — starts once on mount, calls the latest syncAndDraw each frame
   useEffect(() => {
-    requestRef.current = requestAnimationFrame(syncAndDraw);
+    function loop() {
+      syncAndDrawRef.current();
+      requestRef.current = requestAnimationFrame(loop);
+    }
+    requestRef.current = requestAnimationFrame(loop);
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
-  }, [transcription, fontScale, globalOffset]);
+  }, []);
 
   useEffect(() => { subtitlePosRef.current = subtitlePos; }, [subtitlePos]);
   useEffect(() => { fontFamilyRef.current = fontFamily; }, [fontFamily]);
@@ -627,6 +636,8 @@ export default function Home() {
                 setTranscription(prev => prev.filter((_, i) => i !== wordIndex));
               }}
               onSeek={(t) => {
+                setCurrentTime(t);
+                currentTimeRef.current = t;
                 if (audioRef.current) audioRef.current.currentTime = t;
                 if (videoObjRef.current) videoObjRef.current.currentTime = t;
               }}

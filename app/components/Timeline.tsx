@@ -255,9 +255,14 @@ export default function Timeline({
       if (drag) {
         const movedX = Math.abs(e.clientX - drag.startClientX);
         const movedY = Math.abs(e.clientY - drag.startClientY);
-        if (movedX < CLICK_THRESHOLD_PX && movedY < CLICK_THRESHOLD_PX && drag.edge === 'body') {
+        // Use a larger threshold for touch — fingers are less precise than cursors
+        const threshold = e.pointerType === 'touch' ? 10 : CLICK_THRESHOLD_PX;
+        const didTap = movedX < threshold && movedY < threshold;
+
+        if (didTap) {
           const key = `${drag.fw.chunkIndex}-${drag.fw.wordIndex}`;
           if (e.pointerType === 'touch') {
+            // Any tap on the block (body OR edge) counts — small blocks may have no body area
             const now = Date.now();
             if (now - lastTapTimeRef.current < 400 && selectedKeyRef.current === key) {
               // double tap → open text editor
@@ -265,13 +270,13 @@ export default function Timeline({
               setSelectedKey(null);
               selectedKeyRef.current = null;
             } else {
-              // single tap → select and show delete badge (use X to delete)
+              // single tap → select and show delete badge
               setSelectedKey(key);
               selectedKeyRef.current = key;
             }
             lastTapTimeRef.current = now;
-          } else {
-            // mouse click → open text editor
+          } else if (drag.edge === 'body') {
+            // mouse click on body → open text editor
             setSelectedKey(null);
             selectedKeyRef.current = null;
             setEditingKey(key);
@@ -411,6 +416,8 @@ export default function Timeline({
             {flatWords.map((fw) => {
               const left = fw.start * PX_PER_SEC;
               const width = Math.max(8, (fw.end - fw.start) * PX_PER_SEC);
+              // Handles shrink on narrow blocks so the center body area is always tappable
+              const handleW = Math.min(20, Math.max(0, Math.floor((width - 10) / 2)));
               const isActive =
                 drag?.fw.chunkIndex === fw.chunkIndex && drag?.fw.wordIndex === fw.wordIndex;
               const isEditing = editingKey === `${fw.chunkIndex}-${fw.wordIndex}`;
@@ -435,12 +442,12 @@ export default function Timeline({
                   style={{ left: `${left}px`, width: `${width}px`, cursor: isEditing ? 'text' : 'grab', touchAction: 'none' }}
                   title={isEditing ? 'Edit word' : `${fw.word} · ${formatTimeFull(fw.start)} → ${formatTimeFull(fw.end)}`}
                 >
-                  {/* Left resize handle — hidden while editing */}
-                  {!isEditing && (
+                  {/* Left resize handle — hidden while editing, shrinks on narrow blocks */}
+                  {!isEditing && handleW > 0 && (
                     <div
                       onPointerDown={(e) => onEdgePointerDown(e, fw, 'left')}
-                      className="absolute left-0 top-0 h-full w-5 cursor-ew-resize bg-black/0 hover:bg-black/40"
-                      style={{ touchAction: 'none' }}
+                      className="absolute left-0 top-0 h-full cursor-ew-resize bg-black/0 hover:bg-black/40"
+                      style={{ touchAction: 'none', width: `${handleW}px` }}
                     />
                   )}
 
@@ -474,12 +481,12 @@ export default function Timeline({
                     </span>
                   )}
 
-                  {/* Right resize handle — hidden while editing */}
-                  {!isEditing && (
+                  {/* Right resize handle — hidden while editing, shrinks on narrow blocks */}
+                  {!isEditing && handleW > 0 && (
                     <div
                       onPointerDown={(e) => onEdgePointerDown(e, fw, 'right')}
-                      className="absolute right-0 top-0 h-full w-5 cursor-ew-resize bg-black/0 hover:bg-black/40"
-                      style={{ touchAction: 'none' }}
+                      className="absolute right-0 top-0 h-full cursor-ew-resize bg-black/0 hover:bg-black/40"
+                      style={{ touchAction: 'none', width: `${handleW}px` }}
                     />
                   )}
 

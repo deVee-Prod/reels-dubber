@@ -579,11 +579,8 @@ export default function Home() {
             </div>
           )}
 
-          {/* Compact Size / Position / Font strip — all in one row */}
+          {/* Compact Position / Font strip */}
           <div className="flex items-center gap-2 bg-white/[0.02] border border-white/5 rounded-2xl px-4 py-3">
-            <span className="text-[7px] uppercase tracking-[0.2em] text-white/30 font-bold shrink-0">Size</span>
-            <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-[3] min-w-0 accent-[#A855F7]" />
-            <div className="w-px h-3.5 bg-white/10 shrink-0 mx-1" />
             <span className="text-[7px] uppercase tracking-[0.2em] text-white/30 font-bold shrink-0">Pos</span>
             <button onClick={() => setSubtitlePos(prev => Math.max(10, prev - 5))} className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-[10px] active:scale-90 transition-transform">▼</button>
             <span className="text-[8px] font-mono text-[#A855F7] w-7 text-center shrink-0">{Math.round(subtitlePos)}%</span>
@@ -635,6 +632,11 @@ export default function Home() {
               <div className="text-[8px] uppercase tracking-[0.3em] text-white/10 font-bold">Waiting for Dub...</div>
             </div>
           )}
+
+          <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl px-4 py-3">
+            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0">Size</span>
+            <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7]" />
+          </div>
 
           <div className="flex flex-col gap-3 md:gap-4 pb-4">
             <div className="flex items-center gap-3">

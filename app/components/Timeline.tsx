@@ -69,6 +69,7 @@ interface TimelineProps {
   onWordTimingChange: (chunkIndex: number, wordIndex: number, patch: Partial<Word>) => void;
   onWordTextChange?: (chunkIndex: number, wordIndex: number, text: string) => void;
   onWordToggleForceBreak?: (chunkIndex: number, wordIndex: number) => void;
+  onWordDelete?: (chunkIndex: number, wordIndex: number) => void;
   onSeek?: (t: number) => void;
 }
 
@@ -80,6 +81,7 @@ export default function Timeline({
   onWordTimingChange,
   onWordTextChange,
   onWordToggleForceBreak,
+  onWordDelete,
   onSeek,
 }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -302,7 +304,7 @@ export default function Timeline({
                 drag?.fw.chunkIndex === fw.chunkIndex && drag?.fw.wordIndex === fw.wordIndex;
               const isEditing = editingKey === `${fw.chunkIndex}-${fw.wordIndex}`;
               const cls = [
-                'group absolute top-0 flex h-full items-center overflow-hidden rounded-sm transition-colors',
+                'group absolute top-0 flex h-full items-center rounded-sm transition-colors',
                 isEditing ? 'bg-[#6B21A8] ring-2 ring-[#A855F7]' :
                 isActive ? 'bg-[#A855F7] z-10 ring-2 ring-white/80' :
                 'bg-[#A855F7] hover:bg-[#9333EA]',
@@ -364,6 +366,17 @@ export default function Timeline({
                       className="absolute right-0 top-0 h-full w-2 cursor-ew-resize bg-black/0 hover:bg-black/40"
                     />
                   )}
+
+                  {/* Delete badge — hover on desktop, always visible in edit mode */}
+                  {onWordDelete && (
+                    <button
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); onWordDelete(fw.chunkIndex, fw.wordIndex); }}
+                      className={`absolute -top-2 -right-2 z-30 flex w-4 h-4 items-center justify-center rounded-full bg-red-600 text-white text-[9px] font-bold leading-none ${isEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -376,7 +389,16 @@ export default function Timeline({
             style={{ willChange: 'transform' }}
           >
             <div className="absolute left-0 top-0 h-full w-px bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)]" />
-            <div className="absolute -left-1.5 top-0 h-3 w-3 -translate-y-1 rotate-45 bg-white" />
+            {/* Draggable diamond — pointer-events-auto so touch/mouse can grab it */}
+            <div
+              onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); }}
+              onPointerMove={(e) => {
+                if (!(e.buttons & 1)) return;
+                const t = Math.max(0, Math.min(safeDuration, pointerXToTime(e.nativeEvent)));
+                if (onSeek) onSeek(t);
+              }}
+              className="absolute -left-3 top-0 h-6 w-6 -translate-y-2 rotate-45 bg-white cursor-ew-resize touch-none pointer-events-auto"
+            />
           </div>
 
           {/* Live tooltip during drag */}

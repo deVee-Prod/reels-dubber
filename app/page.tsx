@@ -7,8 +7,11 @@ import Timeline from './components/Timeline';
 const FONTS = [
   { id: 'NotoSansTight', label: 'Noto Tight', file: '/NotoSansTight.ttf' },
   { id: 'Heebo',         label: 'Heebo',      file: '/Heebo.ttf'         },
-  { id: 'Roboto',        label: 'Roboto',      file: '/Roboto.ttf'        },
 ] as const;
+
+// Canvas preview renders at this fraction of the source resolution —
+// cheaper on mobile, looks identical since the canvas is CSS-scaled anyway.
+const PREVIEW_SCALE = 0.5;
 
 type FontId = typeof FONTS[number]['id'];
 
@@ -43,7 +46,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const subtitleRef = useRef<HTMLSpanElement>(null); 
+  const subtitleRef = useRef<HTMLSpanElement>(null);
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
@@ -51,6 +54,8 @@ export default function Home() {
   // Refs so syncAndDraw always reads live values without closing over stale state
   const subtitlePosRef = useRef(25);
   const fontFamilyRef  = useRef<FontId>('NotoSansTight');
+  // Ref to latest togglePlay so spacebar listener never captures a stale closure
+  const togglePlayRef = useRef<() => Promise<void>>(async () => {});
 
   const syncAndDraw = () => {
     const video = videoObjRef.current;
@@ -62,9 +67,10 @@ export default function Home() {
 
       // Always draw the current video frame (handles both playback and seek-while-paused)
       if (ctx && video.videoWidth > 0) {
-        if (canvas.width !== video.videoWidth) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+        const targetW = Math.round(video.videoWidth * PREVIEW_SCALE);
+        if (canvas.width !== targetW) {
+          canvas.width = targetW;
+          canvas.height = Math.round(video.videoHeight * PREVIEW_SCALE);
         }
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       }
@@ -165,8 +171,8 @@ export default function Home() {
       video.addEventListener('loadeddata', () => {
         const ctx = canvasRef.current?.getContext('2d');
         if (ctx && canvasRef.current && video.videoWidth > 0) {
-           canvasRef.current.width = video.videoWidth;
-           canvasRef.current.height = video.videoHeight;
+           canvasRef.current.width = Math.round(video.videoWidth * PREVIEW_SCALE);
+           canvasRef.current.height = Math.round(video.videoHeight * PREVIEW_SCALE);
            ctx.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
         }
       });
@@ -194,6 +200,21 @@ export default function Home() {
       setIsPlaying(false);
     }
   };
+
+  // Keep togglePlayRef current so the spacebar listener is never stale
+  useEffect(() => { togglePlayRef.current = togglePlay; });
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key !== ' ') return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      e.preventDefault();
+      togglePlayRef.current();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
@@ -557,7 +578,7 @@ export default function Home() {
                  </div>
                </div>
                <div className="px-2">
-                 <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="w-full h-1.5 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer" />
+                 <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="w-full h-2 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer touch-none" />
                </div>
              </div>
           )}
@@ -611,6 +632,9 @@ export default function Home() {
                 setTranscription(prev => prev.map((item, i) =>
                   i === wordIndex ? { ...item, word: text } : item
                 ));
+              }}
+              onWordDelete={(_chunkIndex, wordIndex) => {
+                setTranscription(prev => prev.filter((_, i) => i !== wordIndex));
               }}
               onSeek={(t) => {
                 if (audioRef.current) audioRef.current.currentTime = t;

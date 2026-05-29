@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import Timeline from './components/Timeline';
 
 const formatTime = (time: number) => {
   if (isNaN(time)) return "00:00";
@@ -38,45 +39,77 @@ export default function Home() {
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
   const videoObjRef = useRef<HTMLVideoElement | null>(null);
+  // Ref so syncAndDraw reads live subtitle position without closing over stale state
+  const subtitlePosRef = useRef(25);
 
   const syncAndDraw = () => {
     const video = videoObjRef.current;
     const audio = audioRef.current;
     const canvas = canvasRef.current;
-    
+
     if (video && audio && canvas) {
-      if (!video.paused && !video.ended) {
-         const ctx = canvas.getContext('2d');
-         if (ctx && video.videoWidth > 0) {
-           if (canvas.width !== video.videoWidth) {
-             canvas.width = video.videoWidth;
-             canvas.height = video.videoHeight;
-           }
-           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-         }
-         if (Math.abs(video.currentTime - audio.currentTime) > 0.2) {
-            video.currentTime = audio.currentTime;
-         }
+      const ctx = canvas.getContext('2d');
+
+      // Always draw the current video frame (handles both playback and seek-while-paused)
+      if (ctx && video.videoWidth > 0) {
+        if (canvas.width !== video.videoWidth) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       }
+
+      // Keep video clock in sync with audio clock during playback
+      if (!video.paused && !video.ended && Math.abs(video.currentTime - audio.currentTime) > 0.2) {
+        video.currentTime = audio.currentTime;
+      }
+
       if (!audio.paused && !audio.ended) {
         setCurrentTime(audio.currentTime);
       }
-      if (subtitleRef.current && transcription.length > 0) {
+
+      // Draw subtitle directly on canvas — same font + size formula as FFmpeg export
+      if (ctx && canvas.width > 0 && transcription.length > 0) {
         const time = audio.currentTime + globalOffset;
         const wordObj = transcription.find(w => time >= w.start && time <= w.end);
         if (wordObj) {
-          if (lastWordRef.current !== wordObj.word + wordObj.start) {
-            subtitleRef.current.innerText = wordObj.word;
-            subtitleRef.current.style.display = "inline-block";
-            const index = transcription.findIndex(w => w.start === wordObj.start);
-            const sizes = [28, 42, 58];
-            const dynamicSize = sizes[index % 3] * fontScale;
-            subtitleRef.current.style.fontSize = `${dynamicSize}px`;
+          const index = transcription.findIndex(w => w.start === wordObj.start);
+          const baseSize = [28, 42, 58][index % 3] * fontScale;
+          const fontSize = Math.round(baseSize * (canvas.height / 500));
+          const x = canvas.width / 2;
+          const y = canvas.height - (canvas.height * subtitlePosRef.current / 100);
+          const borderW = Math.max(2, Math.round(2.4 * (canvas.height / 500)));
+
+          ctx.save();
+          ctx.font = `900 ${fontSize}px "NotoSansTight", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+
+          // Outline first (no shadow on stroke)
+          ctx.shadowColor = 'transparent';
+          ctx.lineWidth = borderW;
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+          ctx.strokeText(wordObj.word, x, y);
+
+          // Fill with drop shadow
+          ctx.shadowColor = 'rgba(0,0,0,0.95)';
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = Math.round(2 * (canvas.height / 500));
+          ctx.shadowBlur = 4;
+          ctx.fillStyle = '#ECE9E4';
+          ctx.fillText(wordObj.word, x, y);
+          ctx.restore();
+
+          // Keep span sized but invisible — used only as the drag hit-target
+          if (subtitleRef.current && lastWordRef.current !== wordObj.word + wordObj.start) {
+            subtitleRef.current.style.display = 'inline-block';
+            subtitleRef.current.style.fontSize = `${[28, 42, 58][index % 3] * fontScale}px`;
             lastWordRef.current = wordObj.word + wordObj.start;
           }
         } else {
-          subtitleRef.current.style.display = "none";
-          lastWordRef.current = "";
+          if (subtitleRef.current) subtitleRef.current.style.display = 'none';
+          lastWordRef.current = '';
         }
       }
     }
@@ -87,6 +120,15 @@ export default function Home() {
     requestRef.current = requestAnimationFrame(syncAndDraw);
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [transcription, fontScale, globalOffset]);
+
+  // Keep subtitlePosRef in sync so syncAndDraw always reads the live value
+  useEffect(() => { subtitlePosRef.current = subtitlePos; }, [subtitlePos]);
+
+  // Pre-load NotoSansTight into the browser font registry so canvas ctx.fillText uses it
+  useEffect(() => {
+    const font = new FontFace('NotoSansTight', 'url(/NotoSansTight.ttf)');
+    font.load().then(f => document.fonts.add(f)).catch(() => {});
+  }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
@@ -238,8 +280,8 @@ export default function Home() {
       const outputPath = `output_${Date.now()}.${ext}`;
 
       const videoH = videoObjRef.current?.videoHeight || 1920;
-      const previewH = canvasRef.current?.clientHeight || 500;
-      const scaleRatio = videoH / previewH;
+      // 500 is the reference height — matches the canvas drawing formula exactly
+      const scaleRatio = videoH / 500;
 
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
@@ -469,7 +511,8 @@ export default function Home() {
                   onMouseDown={(e) => { e.stopPropagation(); startDragging(e); }} 
                   onTouchStart={(e) => { e.stopPropagation(); startDragging(e); }}
                 >
-                  <span ref={subtitleRef} className="text-white font-black drop-shadow-[0_4px_15px_rgba(0,0,0,1)] uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'sans-serif', display: 'none' }} />
+                  {/* Text is invisible — canvas draws it. Span stays for drag-target sizing. */}
+                  <span ref={subtitleRef} className="font-black uppercase tracking-tighter pointer-events-none" style={{ fontFamily: 'NotoSansTight, sans-serif', color: 'transparent', display: 'none' }} />
                 </div>
               </div>
             ) : (
@@ -521,22 +564,32 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="h-24 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 flex gap-3 items-center overflow-x-auto no-scrollbar">
-            {transcription.length > 0 ? (
-              transcription.map((item, i) => (
-                <div key={i} className={`h-full min-w-[100px] border rounded-xl flex flex-col items-center justify-center p-2 relative transition-all ${currentTime >= item.start && currentTime <= item.end ? 'bg-[#A855F7]/30 border-[#A855F7]' : 'bg-white/[0.02] border-white/5'}`}>
-                  <input value={item.word} onChange={(e) => {
-                     const updated = [...transcription];
-                     updated[i].word = e.target.value;
-                     setTranscription(updated);
-                  }} className="bg-transparent border-none outline-none text-[10px] text-white font-bold text-center w-full focus:text-[#A855F7]" />
-                  <button onClick={() => { const updated = transcription.filter((_, idx) => idx !== i); setTranscription(updated); }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/50 rounded-full text-[8px] flex items-center justify-center hover:bg-red-500 transition-colors">✕</button>
-                </div>
-              ))
-            ) : (
-              <div className="w-full text-center text-[8px] uppercase tracking-[0.3em] text-white/10 font-bold">Waiting for Dub...</div>
-            )}
-          </div>
+          {transcription.length > 0 && duration > 0 ? (
+            <Timeline
+              chunks={transcription.map(item => ({
+                start: item.start,
+                end: item.end,
+                text: item.word,
+                words: [{ word: item.word, start: item.start, end: item.end }],
+              }))}
+              duration={duration}
+              getCurrentTime={() => audioRef.current?.currentTime ?? 0}
+              isPlaying={() => !!audioRef.current && !audioRef.current.paused}
+              onWordTimingChange={(chunkIndex, _wordIndex, patch) => {
+                setTranscription(prev => prev.map((item, i) =>
+                  i === chunkIndex ? { ...item, ...patch } : item
+                ));
+              }}
+              onSeek={(t) => {
+                if (audioRef.current) audioRef.current.currentTime = t;
+                if (videoObjRef.current) videoObjRef.current.currentTime = t;
+              }}
+            />
+          ) : (
+            <div className="h-16 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl flex items-center justify-center">
+              <div className="text-[8px] uppercase tracking-[0.3em] text-white/10 font-bold">Waiting for Dub...</div>
+            </div>
+          )}
 
           <div className="flex flex-col gap-3 md:gap-4 pb-8">
             <div className="flex items-center gap-3">

@@ -54,6 +54,8 @@ export default function Home() {
   // Refs so syncAndDraw always reads live values without closing over stale state
   const subtitlePosRef = useRef(30);
   const fontFamilyRef  = useRef<FontId>('NotoSansTight');
+  // Tracks current time for both the seek bar and the Timeline (iOS: audio.currentTime lags when paused)
+  const currentTimeRef = useRef(0);
   // Ref to latest togglePlay so spacebar listener never captures a stale closure
   const togglePlayRef = useRef<() => Promise<void>>(async () => {});
 
@@ -81,12 +83,13 @@ export default function Home() {
       }
 
       if (!audio.paused && !audio.ended) {
+        currentTimeRef.current = audio.currentTime;
         setCurrentTime(audio.currentTime);
       }
 
       // Draw subtitle directly on canvas — same font + size formula as FFmpeg export
       if (ctx && canvas.width > 0 && transcription.length > 0) {
-        const time = audio.currentTime + globalOffset;
+        const time = currentTimeRef.current + globalOffset;
         const wordObj = transcription.find(w => time >= w.start && time <= w.end);
         if (wordObj) {
           const index = transcription.findIndex(w => w.start === wordObj.start);
@@ -219,6 +222,7 @@ export default function Home() {
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
     setCurrentTime(newTime);
+    currentTimeRef.current = newTime;
     if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
     if (audioRef.current) audioRef.current.currentTime = newTime;
   };
@@ -570,7 +574,7 @@ export default function Home() {
                   <div className="w-0 h-0 border-t-[6px] border-t-transparent border-l-[10px] border-l-[#A855F7] border-b-[6px] border-b-transparent ml-1"></div>
                 )}
               </button>
-              <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="flex-1 h-2 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer touch-none" />
+              <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="flex-1 h-2 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer" />
               <div className="shrink-0 flex gap-1 text-[9px] font-mono text-white/40">
                 <span className="text-white/80">{formatTime(currentTime)}</span>
                 <span>/</span>
@@ -607,7 +611,7 @@ export default function Home() {
                 words: transcription.map(item => ({ word: item.word, start: item.start, end: item.end })),
               }]}
               duration={duration}
-              getCurrentTime={() => audioRef.current?.currentTime ?? 0}
+              getCurrentTime={() => currentTimeRef.current}
               isPlaying={() => !!audioRef.current && !audioRef.current.paused}
               onWordTimingChange={(_chunkIndex, wordIndex, patch) => {
                 setTranscription(prev => prev.map((item, i) =>

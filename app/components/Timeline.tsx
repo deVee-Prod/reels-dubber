@@ -96,6 +96,12 @@ export default function Timeline({
   const [editingKey, setEditingKey] = useState<string | null>(null);
   // Ref to the live <input> so we can flush its value before blur fires (mobile e.preventDefault suppresses blur)
   const editingInputRef = useRef<HTMLInputElement | null>(null);
+  // Mobile: selected word block (single tap selects, double tap deletes)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const selectedKeyRef = useRef<string | null>(null);
+  const lastTapTimeRef = useRef<number>(0);
+  const onWordDeleteRef = useRef(onWordDelete);
+  useEffect(() => { onWordDeleteRef.current = onWordDelete; });
 
   const safeDuration = Math.max(1, Number.isFinite(duration) ? duration : 0);
   const totalWidth = Math.max(800, Math.ceil(safeDuration * PX_PER_SEC));
@@ -180,6 +186,7 @@ export default function Timeline({
 
   function onEdgePointerDown(e: React.PointerEvent, fw: FlatWord, edge: 'left' | 'right') {
     commitCurrentEdit();
+    e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
     e.stopPropagation();
     setDrag({ fw, edge, startClientX: e.clientX, startClientY: e.clientY });
@@ -189,6 +196,7 @@ export default function Timeline({
     // Don't start drag while this word is being edited
     if (editingKey === `${fw.chunkIndex}-${fw.wordIndex}`) return;
     commitCurrentEdit();
+    e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
     e.stopPropagation();
     const t0 = pointerXToTime(e.nativeEvent);
@@ -238,9 +246,31 @@ export default function Timeline({
       if (drag) {
         const movedX = Math.abs(e.clientX - drag.startClientX);
         const movedY = Math.abs(e.clientY - drag.startClientY);
-        // Pointer barely moved → treat as a click → open text editor
         if (movedX < CLICK_THRESHOLD_PX && movedY < CLICK_THRESHOLD_PX && drag.edge === 'body') {
-          setEditingKey(`${drag.fw.chunkIndex}-${drag.fw.wordIndex}`);
+          const key = `${drag.fw.chunkIndex}-${drag.fw.wordIndex}`;
+          if (e.pointerType === 'touch') {
+            const now = Date.now();
+            if (now - lastTapTimeRef.current < 400 && selectedKeyRef.current === key) {
+              // double tap → delete
+              onWordDeleteRef.current?.(drag.fw.chunkIndex, drag.fw.wordIndex);
+              setSelectedKey(null);
+              selectedKeyRef.current = null;
+            } else {
+              // single tap → select and show delete badge
+              setSelectedKey(key);
+              selectedKeyRef.current = key;
+            }
+            lastTapTimeRef.current = now;
+          } else {
+            // mouse click → open text editor
+            setSelectedKey(null);
+            selectedKeyRef.current = null;
+            setEditingKey(key);
+          }
+        } else {
+          // pointer moved (drag) → clear any selection
+          setSelectedKey(null);
+          selectedKeyRef.current = null;
         }
       }
       setDrag(null);
@@ -287,6 +317,8 @@ export default function Timeline({
           <div
             onPointerDown={(e) => {
               commitCurrentEdit();
+              setSelectedKey(null);
+              selectedKeyRef.current = null;
               if (!onSeek || !trackRef.current) return;
               const rect = trackRef.current.getBoundingClientRect();
               const x = Math.max(0, e.clientX - rect.left);
@@ -319,11 +351,13 @@ export default function Timeline({
               const isActive =
                 drag?.fw.chunkIndex === fw.chunkIndex && drag?.fw.wordIndex === fw.wordIndex;
               const isEditing = editingKey === `${fw.chunkIndex}-${fw.wordIndex}`;
+              const isSelected = selectedKey === `${fw.chunkIndex}-${fw.wordIndex}`;
               const cls = [
                 'group absolute top-0 flex h-full items-center rounded-sm transition-colors',
-                isEditing ? 'bg-[#6B21A8] ring-2 ring-[#A855F7]' :
-                isActive ? 'bg-[#A855F7] z-10 ring-2 ring-white/80' :
-                'bg-[#A855F7] hover:bg-[#9333EA]',
+                isEditing  ? 'bg-[#6B21A8] ring-2 ring-[#A855F7]' :
+                isSelected ? 'bg-[#7C3AED] ring-2 ring-red-400/70 z-10' :
+                isActive   ? 'bg-[#A855F7] z-10 ring-2 ring-white/80' :
+                             'bg-[#A855F7] hover:bg-[#9333EA]',
               ];
               return (
                 <div
@@ -335,14 +369,15 @@ export default function Timeline({
                     if (onWordToggleForceBreak) onWordToggleForceBreak(fw.chunkIndex, fw.wordIndex);
                   }}
                   className={cls.join(' ')}
-                  style={{ left: `${left}px`, width: `${width}px`, cursor: isEditing ? 'text' : 'grab' }}
+                  style={{ left: `${left}px`, width: `${width}px`, cursor: isEditing ? 'text' : 'grab', touchAction: 'none' }}
                   title={isEditing ? 'Edit word' : `${fw.word} · ${formatTimeFull(fw.start)} → ${formatTimeFull(fw.end)}`}
                 >
                   {/* Left resize handle — hidden while editing */}
                   {!isEditing && (
                     <div
                       onPointerDown={(e) => onEdgePointerDown(e, fw, 'left')}
-                      className="absolute left-0 top-0 h-full w-2 cursor-ew-resize bg-black/0 hover:bg-black/40"
+                      className="absolute left-0 top-0 h-full w-5 cursor-ew-resize bg-black/0 hover:bg-black/40"
+                      style={{ touchAction: 'none' }}
                     />
                   )}
 
@@ -380,16 +415,17 @@ export default function Timeline({
                   {!isEditing && (
                     <div
                       onPointerDown={(e) => onEdgePointerDown(e, fw, 'right')}
-                      className="absolute right-0 top-0 h-full w-2 cursor-ew-resize bg-black/0 hover:bg-black/40"
+                      className="absolute right-0 top-0 h-full w-5 cursor-ew-resize bg-black/0 hover:bg-black/40"
+                      style={{ touchAction: 'none' }}
                     />
                   )}
 
-                  {/* Delete badge — hover on desktop, always visible in edit mode */}
+                  {/* Delete badge — hover on desktop, always visible in edit/selected mode */}
                   {onWordDelete && (
                     <button
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => { e.stopPropagation(); onWordDelete(fw.chunkIndex, fw.wordIndex); }}
-                      className={`absolute -top-2 -right-2 z-30 flex w-4 h-4 items-center justify-center rounded-full bg-red-600 text-white text-[9px] font-bold leading-none ${isEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                      className={`absolute -top-2 -right-2 z-30 flex w-4 h-4 items-center justify-center rounded-full bg-red-600 text-white text-[9px] font-bold leading-none ${isEditing || isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                     >
                       ×
                     </button>

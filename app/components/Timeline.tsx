@@ -6,6 +6,7 @@ const PX_PER_SEC = 180;
 const TRACK_HEIGHT = 56;
 const RULER_HEIGHT = 24;
 const MIN_WORD_DURATION = 0.05;
+const CLICK_THRESHOLD_PX = 5;
 
 function formatTimeShort(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) sec = 0;
@@ -51,6 +52,8 @@ interface DragState {
   t0?: number;
   originalStart?: number;
   originalEnd?: number;
+  startClientX: number;
+  startClientY: number;
 }
 
 interface TooltipState {
@@ -64,6 +67,7 @@ interface TimelineProps {
   getCurrentTime: () => number;
   isPlaying: () => boolean;
   onWordTimingChange: (chunkIndex: number, wordIndex: number, patch: Partial<Word>) => void;
+  onWordTextChange?: (chunkIndex: number, wordIndex: number, text: string) => void;
   onWordToggleForceBreak?: (chunkIndex: number, wordIndex: number) => void;
   onSeek?: (t: number) => void;
 }
@@ -74,6 +78,7 @@ export default function Timeline({
   getCurrentTime,
   isPlaying,
   onWordTimingChange,
+  onWordTextChange,
   onWordToggleForceBreak,
   onSeek,
 }: TimelineProps) {
@@ -85,6 +90,8 @@ export default function Timeline({
 
   const [drag, setDrag] = useState<DragState | null>(null);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  // Key of the word currently being text-edited, format "chunkIndex-wordIndex"
+  const [editingKey, setEditingKey] = useState<string | null>(null);
 
   const safeDuration = Math.max(1, Number.isFinite(duration) ? duration : 0);
   const totalWidth = Math.max(800, Math.ceil(safeDuration * PX_PER_SEC));
@@ -112,7 +119,7 @@ export default function Timeline({
   const markers: number[] = [];
   for (let s = 0; s <= safeDuration; s += markerEvery) markers.push(s);
 
-  // Playhead RAF loop — direct DOM manipulation, no React re-renders at 60fps
+  // Playhead RAF — direct DOM, no React re-renders at 60fps
   useEffect(() => {
     function tick() {
       const t = typeof getCurrentTime === 'function' ? getCurrentTime() : 0;
@@ -159,14 +166,24 @@ export default function Timeline({
   function onEdgePointerDown(e: React.PointerEvent, fw: FlatWord, edge: 'left' | 'right') {
     e.preventDefault();
     e.stopPropagation();
-    setDrag({ fw, edge });
+    setDrag({ fw, edge, startClientX: e.clientX, startClientY: e.clientY });
   }
 
   function onBodyPointerDown(e: React.PointerEvent, fw: FlatWord) {
+    // Don't start drag while this word is being edited
+    if (editingKey === `${fw.chunkIndex}-${fw.wordIndex}`) return;
     e.preventDefault();
     e.stopPropagation();
     const t0 = pointerXToTime(e.nativeEvent);
-    setDrag({ fw, edge: 'body', t0, originalStart: fw.start, originalEnd: fw.end });
+    setDrag({
+      fw,
+      edge: 'body',
+      t0,
+      originalStart: fw.start,
+      originalEnd: fw.end,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+    });
   }
 
   useEffect(() => {
@@ -200,7 +217,15 @@ export default function Timeline({
       setTooltip({ time: tooltipTime, x: refTime * PX_PER_SEC });
     }
 
-    function onUp() {
+    function onUp(e: PointerEvent) {
+      if (drag) {
+        const movedX = Math.abs(e.clientX - drag.startClientX);
+        const movedY = Math.abs(e.clientY - drag.startClientY);
+        // Pointer barely moved → treat as a click → open text editor
+        if (movedX < CLICK_THRESHOLD_PX && movedY < CLICK_THRESHOLD_PX && drag.edge === 'body') {
+          setEditingKey(`${drag.fw.chunkIndex}-${drag.fw.wordIndex}`);
+        }
+      }
       setDrag(null);
       setTooltip(null);
     }
@@ -226,7 +251,7 @@ export default function Timeline({
           Timeline
         </span>
         <span className="text-[10px] text-white/40">
-          1s = {PX_PER_SEC}px · drag edges to retime · {flatWords.length} word{flatWords.length === 1 ? '' : 's'}
+          drag to retime · click to edit · {flatWords.length} word{flatWords.length === 1 ? '' : 's'}
         </span>
       </div>
 
@@ -275,14 +300,13 @@ export default function Timeline({
               const width = Math.max(8, (fw.end - fw.start) * PX_PER_SEC);
               const isActive =
                 drag?.fw.chunkIndex === fw.chunkIndex && drag?.fw.wordIndex === fw.wordIndex;
+              const isEditing = editingKey === `${fw.chunkIndex}-${fw.wordIndex}`;
               const cls = [
-                'group absolute top-0 flex h-full items-center overflow-hidden rounded-sm bg-[#A855F7] transition-colors',
+                'group absolute top-0 flex h-full items-center overflow-hidden rounded-sm transition-colors',
+                isEditing ? 'bg-[#6B21A8] ring-2 ring-[#A855F7]' :
+                isActive ? 'bg-[#A855F7] z-10 ring-2 ring-white/80' :
+                'bg-[#A855F7] hover:bg-[#9333EA]',
               ];
-              if (isActive) {
-                cls.push('z-10 ring-2 ring-white/80');
-              } else {
-                cls.push('hover:bg-[#9333EA]');
-              }
               return (
                 <div
                   key={`${fw.chunkIndex}-${fw.wordIndex}`}
@@ -293,26 +317,59 @@ export default function Timeline({
                     if (onWordToggleForceBreak) onWordToggleForceBreak(fw.chunkIndex, fw.wordIndex);
                   }}
                   className={cls.join(' ')}
-                  style={{ left: `${left}px`, width: `${width}px`, cursor: 'grab' }}
-                  title={`${fw.word} · ${formatTimeFull(fw.start)} → ${formatTimeFull(fw.end)}`}
+                  style={{ left: `${left}px`, width: `${width}px`, cursor: isEditing ? 'text' : 'grab' }}
+                  title={isEditing ? 'Edit word' : `${fw.word} · ${formatTimeFull(fw.start)} → ${formatTimeFull(fw.end)}`}
                 >
-                  <div
-                    onPointerDown={(e) => onEdgePointerDown(e, fw, 'left')}
-                    className="absolute left-0 top-0 h-full w-2 cursor-ew-resize bg-black/0 hover:bg-black/40"
-                  />
-                  <span className="pointer-events-none mx-auto truncate px-2 text-[11px] font-semibold uppercase tracking-wide text-white">
-                    {fw.word}
-                  </span>
-                  <div
-                    onPointerDown={(e) => onEdgePointerDown(e, fw, 'right')}
-                    className="absolute right-0 top-0 h-full w-2 cursor-ew-resize bg-black/0 hover:bg-black/40"
-                  />
+                  {/* Left resize handle — hidden while editing */}
+                  {!isEditing && (
+                    <div
+                      onPointerDown={(e) => onEdgePointerDown(e, fw, 'left')}
+                      className="absolute left-0 top-0 h-full w-2 cursor-ew-resize bg-black/0 hover:bg-black/40"
+                    />
+                  )}
+
+                  {isEditing ? (
+                    <input
+                      autoFocus
+                      defaultValue={fw.word}
+                      onBlur={(e) => {
+                        if (onWordTextChange) onWordTextChange(fw.chunkIndex, fw.wordIndex, e.target.value.trim() || fw.word);
+                        setEditingKey(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          if (onWordTextChange) onWordTextChange(fw.chunkIndex, fw.wordIndex, e.currentTarget.value.trim() || fw.word);
+                          setEditingKey(null);
+                          e.preventDefault();
+                        }
+                        if (e.key === 'Escape') {
+                          setEditingKey(null);
+                          e.preventDefault();
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="w-full bg-transparent border-none outline-none text-center text-[11px] font-semibold uppercase tracking-wide text-white px-2 cursor-text"
+                    />
+                  ) : (
+                    <span className="pointer-events-none mx-auto truncate px-2 text-[11px] font-semibold uppercase tracking-wide text-white">
+                      {fw.word}
+                    </span>
+                  )}
+
+                  {/* Right resize handle — hidden while editing */}
+                  {!isEditing && (
+                    <div
+                      onPointerDown={(e) => onEdgePointerDown(e, fw, 'right')}
+                      className="absolute right-0 top-0 h-full w-2 cursor-ew-resize bg-black/0 hover:bg-black/40"
+                    />
+                  )}
                 </div>
               );
             })}
           </div>
 
-          {/* Playhead — translated via ref, no React re-renders at 60fps */}
+          {/* Playhead */}
           <div
             ref={playheadRef}
             className="pointer-events-none absolute top-0 z-20 h-full"

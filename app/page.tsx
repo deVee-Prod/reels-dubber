@@ -4,6 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Timeline from './components/Timeline';
 
+const FONTS = [
+  { id: 'NotoSansTight', label: 'Noto Tight', file: '/NotoSansTight.ttf' },
+  { id: 'Heebo',         label: 'Heebo',      file: '/Heebo.ttf'         },
+  { id: 'Roboto',        label: 'Roboto',      file: '/Roboto.ttf'        },
+] as const;
+
+type FontId = typeof FONTS[number]['id'];
+
 const formatTime = (time: number) => {
   if (isNaN(time)) return "00:00";
   const m = Math.floor(time / 60).toString().padStart(2, '0');
@@ -29,8 +37,9 @@ export default function Home() {
   const [subtitlePos, setSubtitlePos] = useState(25);
   const [fontScale, setFontScale] = useState(1);
   const [globalOffset, setGlobalOffset] = useState(0); 
-  const [isPlaying, setIsPlaying] = useState(false); 
-  
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [fontFamily, setFontFamily] = useState<FontId>('NotoSansTight');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -39,8 +48,9 @@ export default function Home() {
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
   const videoObjRef = useRef<HTMLVideoElement | null>(null);
-  // Ref so syncAndDraw reads live subtitle position without closing over stale state
+  // Refs so syncAndDraw always reads live values without closing over stale state
   const subtitlePosRef = useRef(25);
+  const fontFamilyRef  = useRef<FontId>('NotoSansTight');
 
   const syncAndDraw = () => {
     const video = videoObjRef.current;
@@ -81,7 +91,7 @@ export default function Home() {
           const borderW = Math.max(2, Math.round(2.4 * (canvas.height / 500)));
 
           ctx.save();
-          ctx.font = `900 ${fontSize}px "NotoSansTight", sans-serif`;
+          ctx.font = `900 ${fontSize}px "${fontFamilyRef.current}", sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
 
@@ -121,13 +131,15 @@ export default function Home() {
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [transcription, fontScale, globalOffset]);
 
-  // Keep subtitlePosRef in sync so syncAndDraw always reads the live value
   useEffect(() => { subtitlePosRef.current = subtitlePos; }, [subtitlePos]);
+  useEffect(() => { fontFamilyRef.current = fontFamily; }, [fontFamily]);
 
-  // Pre-load NotoSansTight into the browser font registry so canvas ctx.fillText uses it
+  // Pre-load all fonts into the browser registry so canvas uses them immediately
   useEffect(() => {
-    const font = new FontFace('NotoSansTight', 'url(/NotoSansTight.ttf)');
-    font.load().then(f => document.fonts.add(f)).catch(() => {});
+    FONTS.forEach(({ id, file }) => {
+      const font = new FontFace(id, `url(${file})`);
+      font.load().then(f => document.fonts.add(f)).catch(() => {});
+    });
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -286,7 +298,8 @@ export default function Home() {
       await ffmpeg.writeFile(inputPath, await fetchFile(file));
 
       try {
-        const fontUrl = `${window.location.origin}/NotoSansTight.ttf?v=${Date.now()}`;
+        const selectedFont = FONTS.find(f => f.id === fontFamily) ?? FONTS[0];
+        const fontUrl = `${window.location.origin}${selectedFont.file}?v=${Date.now()}`;
         const fontRes = await fetch(fontUrl);
         if (!fontRes.ok) throw new Error("Font fetch failed");
         const fontBuffer = await fontRes.arrayBuffer();
@@ -564,20 +577,39 @@ export default function Home() {
             </div>
           </div>
 
+          <div className="flex items-center gap-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0">Font</span>
+            <div className="flex gap-2 flex-wrap">
+              {FONTS.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setFontFamily(f.id)}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${fontFamily === f.id ? 'bg-[#A855F7] text-white' : 'bg-white/5 text-white/40 hover:text-white/70 hover:bg-white/10'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {transcription.length > 0 && duration > 0 ? (
             <Timeline
-              chunks={transcription.map(item => ({
-                start: item.start,
-                end: item.end,
-                text: item.word,
-                words: [{ word: item.word, start: item.start, end: item.end }],
-              }))}
+              chunks={[{
+                start: transcription[0].start,
+                end: transcription[transcription.length - 1].end,
+                words: transcription.map(item => ({ word: item.word, start: item.start, end: item.end })),
+              }]}
               duration={duration}
               getCurrentTime={() => audioRef.current?.currentTime ?? 0}
               isPlaying={() => !!audioRef.current && !audioRef.current.paused}
-              onWordTimingChange={(chunkIndex, _wordIndex, patch) => {
+              onWordTimingChange={(_chunkIndex, wordIndex, patch) => {
                 setTranscription(prev => prev.map((item, i) =>
-                  i === chunkIndex ? { ...item, ...patch } : item
+                  i === wordIndex ? { ...item, ...patch } : item
+                ));
+              }}
+              onWordTextChange={(_chunkIndex, wordIndex, text) => {
+                setTranscription(prev => prev.map((item, i) =>
+                  i === wordIndex ? { ...item, word: text } : item
                 ));
               }}
               onSeek={(t) => {

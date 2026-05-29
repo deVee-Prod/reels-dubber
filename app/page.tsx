@@ -34,7 +34,8 @@ export default function Home() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0); 
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
-  const [transcription, setTranscription] = useState<any[]>([]); 
+  const [transcription, setTranscription] = useState<any[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
   const [currentTime, setCurrentTime] = useState(0); 
   const [duration, setDuration] = useState(0); 
   const [subtitlePos, setSubtitlePos] = useState(30);
@@ -56,6 +57,8 @@ export default function Home() {
   const fontFamilyRef  = useRef<FontId>('NotoSansTight');
   // Tracks current time for both the seek bar and the Timeline (iOS: audio.currentTime lags when paused)
   const currentTimeRef = useRef(0);
+  // Undo history — stores snapshots of transcription before each destructive op
+  const historyRef = useRef<any[][]>([]);
   // Holds the latest syncAndDraw so the RAF loop never runs a stale closure
   const syncAndDrawRef = useRef<() => void>(() => {});
   // Ref to latest togglePlay so spacebar listener never captures a stale closure
@@ -65,6 +68,21 @@ export default function Home() {
   // so Timeline's RAF effect never restarts and the playhead loop runs without interruption
   const getTimeCallback = useCallback(() => currentTimeRef.current, []);
   const isPlayingCallback = useCallback(() => !!(audioRef.current && !audioRef.current.paused), []);
+
+  // snapshot is the transcription array to save BEFORE a change happens
+  function pushHistory(snapshot: any[]) {
+    historyRef.current = [...historyRef.current.slice(-29), [...snapshot]];
+    setCanUndo(true);
+  }
+
+  const handleUndo = useCallback(() => {
+    const h = historyRef.current;
+    if (h.length === 0) return;
+    const prev = h[h.length - 1];
+    historyRef.current = h.slice(0, -1);
+    setTranscription(prev);
+    setCanUndo(h.length > 1);
+  }, []);
 
   const syncAndDraw = () => {
     const video = videoObjRef.current;
@@ -223,6 +241,11 @@ export default function Home() {
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
       if (e.key !== ' ') return;
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
@@ -231,7 +254,7 @@ export default function Home() {
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, []);
+  }, [handleUndo]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
@@ -283,6 +306,8 @@ export default function Home() {
 
   const handleDub = async () => {
     if (!file) return;
+    historyRef.current = [];
+    setCanUndo(false);
     setIsDubbing(true);
     
     let ffmpeg = ffmpegRef.current;
@@ -618,35 +643,49 @@ export default function Home() {
           </div>
 
           {transcription.length > 0 && duration > 0 ? (
-            <Timeline
-              chunks={[{
-                start: transcription[0].start,
-                end: transcription[transcription.length - 1].end,
-                words: transcription.map(item => ({ word: item.word, start: item.start, end: item.end })),
-              }]}
-              duration={duration}
-              getCurrentTime={getTimeCallback}
-              isPlaying={isPlayingCallback}
-              onWordTimingChange={(_chunkIndex, wordIndex, patch) => {
-                setTranscription(prev => prev.map((item, i) =>
-                  i === wordIndex ? { ...item, ...patch } : item
-                ));
-              }}
-              onWordTextChange={(_chunkIndex, wordIndex, text) => {
-                setTranscription(prev => prev.map((item, i) =>
-                  i === wordIndex ? { ...item, word: text } : item
-                ));
-              }}
-              onWordDelete={(_chunkIndex, wordIndex) => {
-                setTranscription(prev => prev.filter((_, i) => i !== wordIndex));
-              }}
-              onSeek={(t) => {
-                setCurrentTime(t);
-                currentTimeRef.current = t;
-                if (audioRef.current) audioRef.current.currentTime = t;
-                if (videoObjRef.current) videoObjRef.current.currentTime = t;
-              }}
-            />
+            <div>
+              <div className="flex justify-end mb-1.5">
+                <button
+                  onClick={handleUndo}
+                  disabled={!canUndo}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all active:scale-95 ${canUndo ? 'bg-white/5 text-white/60 hover:bg-white/10' : 'text-white/15 cursor-default'}`}
+                >
+                  ↩ Undo
+                </button>
+              </div>
+              <Timeline
+                chunks={[{
+                  start: transcription[0].start,
+                  end: transcription[transcription.length - 1].end,
+                  words: transcription.map(item => ({ word: item.word, start: item.start, end: item.end })),
+                }]}
+                duration={duration}
+                getCurrentTime={getTimeCallback}
+                isPlaying={isPlayingCallback}
+                onDragStart={() => pushHistory(transcription)}
+                onWordTimingChange={(_chunkIndex, wordIndex, patch) => {
+                  setTranscription(prev => prev.map((item, i) =>
+                    i === wordIndex ? { ...item, ...patch } : item
+                  ));
+                }}
+                onWordTextChange={(_chunkIndex, wordIndex, text) => {
+                  pushHistory(transcription);
+                  setTranscription(prev => prev.map((item, i) =>
+                    i === wordIndex ? { ...item, word: text } : item
+                  ));
+                }}
+                onWordDelete={(_chunkIndex, wordIndex) => {
+                  pushHistory(transcription);
+                  setTranscription(prev => prev.filter((_, i) => i !== wordIndex));
+                }}
+                onSeek={(t) => {
+                  setCurrentTime(t);
+                  currentTimeRef.current = t;
+                  if (audioRef.current) audioRef.current.currentTime = t;
+                  if (videoObjRef.current) videoObjRef.current.currentTime = t;
+                }}
+              />
+            </div>
           ) : (
             <div className="h-16 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl flex items-center justify-center">
               <div className="text-[8px] uppercase tracking-[0.3em] text-white/10 font-bold">Waiting for Dub...</div>

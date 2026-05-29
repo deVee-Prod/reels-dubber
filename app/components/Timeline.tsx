@@ -71,6 +71,7 @@ interface TimelineProps {
   onWordToggleForceBreak?: (chunkIndex: number, wordIndex: number) => void;
   onWordDelete?: (chunkIndex: number, wordIndex: number) => void;
   onSeek?: (t: number) => void;
+  onDragStart?: () => void;
 }
 
 export default function Timeline({
@@ -83,6 +84,7 @@ export default function Timeline({
   onWordToggleForceBreak,
   onWordDelete,
   onSeek,
+  onDragStart,
 }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -186,6 +188,7 @@ export default function Timeline({
 
   function onEdgePointerDown(e: React.PointerEvent, fw: FlatWord, edge: 'left' | 'right') {
     commitCurrentEdit();
+    onDragStart?.();
     e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
     e.stopPropagation();
@@ -196,6 +199,7 @@ export default function Timeline({
     // Don't start drag while this word is being edited
     if (editingKey === `${fw.chunkIndex}-${fw.wordIndex}`) return;
     commitCurrentEdit();
+    onDragStart?.();
     e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
     e.stopPropagation();

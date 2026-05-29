@@ -37,7 +37,7 @@ export default function Home() {
   const [transcription, setTranscription] = useState<any[]>([]); 
   const [currentTime, setCurrentTime] = useState(0); 
   const [duration, setDuration] = useState(0); 
-  const [subtitlePos, setSubtitlePos] = useState(25);
+  const [subtitlePos, setSubtitlePos] = useState(30);
   const [fontScale, setFontScale] = useState(1);
   const [globalOffset, setGlobalOffset] = useState(0); 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -52,7 +52,7 @@ export default function Home() {
   const lastWordRef = useRef<string>("");
   const videoObjRef = useRef<HTMLVideoElement | null>(null);
   // Refs so syncAndDraw always reads live values without closing over stale state
-  const subtitlePosRef = useRef(25);
+  const subtitlePosRef = useRef(30);
   const fontFamilyRef  = useRef<FontId>('NotoSansTight');
   // Ref to latest togglePlay so spacebar listener never captures a stale closure
   const togglePlayRef = useRef<() => Promise<void>>(async () => {});
@@ -514,9 +514,9 @@ export default function Home() {
         <p className="text-[9px] tracking-[0.3em] text-white/70 font-bold uppercase">REELS DUBBER</p>
       </header>
 
-      <main className="w-full max-w-2xl mx-auto flex flex-col items-center flex-1 px-4 md:px-6 space-y-4 md:space-y-6 py-6">
-        <div className="w-full space-y-4 md:space-y-6">
-          <div className="relative w-full h-[40vh] md:h-auto md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
+      <main className="w-full max-w-2xl mx-auto flex flex-col items-center flex-1 px-4 md:px-6 space-y-3 md:space-y-5 py-4 md:py-6">
+        <div className="w-full space-y-3 md:space-y-5">
+          <div className="relative w-full h-[48vh] md:h-auto md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
                 <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />
@@ -559,53 +559,42 @@ export default function Home() {
           </div>
 
           {videoPreview && (
-             <div className="flex flex-col gap-4 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl p-4 shadow-inner">
-               <div className="flex items-center justify-between px-2">
-                 <button onClick={togglePlay} className="w-10 h-10 rounded-full bg-[#A855F7]/10 border border-[#A855F7]/20 flex items-center justify-center active:scale-95">
-                    {isPlaying ? (
-                      <div className="flex gap-1">
-                        <div className="w-1 h-3 bg-[#A855F7] rounded-full"></div>
-                        <div className="w-1 h-3 bg-[#A855F7] rounded-full"></div>
-                      </div>
-                    ) : (
-                      <div className="w-0 h-0 border-t-[6px] border-t-transparent border-l-[10px] border-l-[#A855F7] border-b-[6px] border-b-transparent ml-1"></div>
-                    )}
-                 </button>
-                 <div className="flex gap-2 text-[9px] font-mono text-white/40 uppercase tracking-widest">
-                    <span className="text-white bg-white/5 px-2 py-1 rounded-md">{formatTime(currentTime)}</span>
-                    <span className="py-1">/</span>
-                    <span className="py-1">{formatTime(duration)}</span>
-                 </div>
-               </div>
-               <div className="px-2">
-                 <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="w-full h-2 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer touch-none" />
-               </div>
-             </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-            <div className="flex items-center space-x-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-              <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Size</span>
-              <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7]" />
-            </div>
-            <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-              <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold">Position</span>
-              <div className="flex items-center space-x-4 md:space-x-3">
-                <button onClick={() => setSubtitlePos(prev => Math.max(10, prev - 5))} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs active:scale-90 transition-transform">▼</button>
-                <span className="text-[8px] font-mono text-[#A855F7]">{Math.round(subtitlePos)}%</span>
-                <button onClick={() => setSubtitlePos(prev => Math.min(90, prev + 5))} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs active:scale-90 transition-transform">▲</button>
+            <div className="flex items-center gap-3 bg-[#0c0c0c] border border-white/[0.03] rounded-2xl px-4 py-3 shadow-inner">
+              <button onClick={togglePlay} className="w-9 h-9 shrink-0 rounded-full bg-[#A855F7]/10 border border-[#A855F7]/20 flex items-center justify-center active:scale-95">
+                {isPlaying ? (
+                  <div className="flex gap-1">
+                    <div className="w-1 h-3 bg-[#A855F7] rounded-full"></div>
+                    <div className="w-1 h-3 bg-[#A855F7] rounded-full"></div>
+                  </div>
+                ) : (
+                  <div className="w-0 h-0 border-t-[6px] border-t-transparent border-l-[10px] border-l-[#A855F7] border-b-[6px] border-b-transparent ml-1"></div>
+                )}
+              </button>
+              <input type="range" min="0" max={duration || 100} step="0.01" value={currentTime} onChange={handleSeek} className="flex-1 h-2 bg-white/5 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-[#A855F7] [&::-webkit-slider-thumb]:rounded-full cursor-pointer touch-none" />
+              <div className="shrink-0 flex gap-1 text-[9px] font-mono text-white/40">
+                <span className="text-white/80">{formatTime(currentTime)}</span>
+                <span>/</span>
+                <span>{formatTime(duration)}</span>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="flex items-center gap-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0">Font</span>
-            <div className="flex gap-2 flex-wrap">
+          {/* Compact Size / Position / Font strip — all in one row */}
+          <div className="flex items-center gap-2 bg-white/[0.02] border border-white/5 rounded-2xl px-4 py-3">
+            <span className="text-[7px] uppercase tracking-[0.2em] text-white/30 font-bold shrink-0">Size</span>
+            <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-[3] min-w-0 accent-[#A855F7]" />
+            <div className="w-px h-3.5 bg-white/10 shrink-0 mx-1" />
+            <span className="text-[7px] uppercase tracking-[0.2em] text-white/30 font-bold shrink-0">Pos</span>
+            <button onClick={() => setSubtitlePos(prev => Math.max(10, prev - 5))} className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-[10px] active:scale-90 transition-transform">▼</button>
+            <span className="text-[8px] font-mono text-[#A855F7] w-7 text-center shrink-0">{Math.round(subtitlePos)}%</span>
+            <button onClick={() => setSubtitlePos(prev => Math.min(90, prev + 5))} className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-[10px] active:scale-90 transition-transform">▲</button>
+            <div className="w-px h-3.5 bg-white/10 shrink-0 mx-1" />
+            <div className="flex gap-1.5 flex-1 justify-end">
               {FONTS.map(f => (
                 <button
                   key={f.id}
                   onClick={() => setFontFamily(f.id)}
-                  className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${fontFamily === f.id ? 'bg-[#A855F7] text-white' : 'bg-white/5 text-white/40 hover:text-white/70 hover:bg-white/10'}`}
+                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wide transition-all whitespace-nowrap ${fontFamily === f.id ? 'bg-[#A855F7] text-white' : 'bg-white/5 text-white/40 hover:text-white/70 hover:bg-white/10'}`}
                 >
                   {f.label}
                 </button>
@@ -647,7 +636,7 @@ export default function Home() {
             </div>
           )}
 
-          <div className="flex flex-col gap-3 md:gap-4 pb-8">
+          <div className="flex flex-col gap-3 md:gap-4 pb-4">
             <div className="flex items-center gap-3">
               <button 
                 onClick={handleDub} 

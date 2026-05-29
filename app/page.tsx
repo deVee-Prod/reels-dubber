@@ -11,7 +11,7 @@ const FONTS = [
 
 // Canvas preview renders at this fraction of the source resolution —
 // cheaper on mobile, looks identical since the canvas is CSS-scaled anyway.
-const PREVIEW_SCALE = 0.5;
+const PREVIEW_SCALE = 0.3;
 
 type FontId = typeof FONTS[number]['id'];
 
@@ -57,6 +57,8 @@ export default function Home() {
   const fontFamilyRef  = useRef<FontId>('NotoSansTight');
   // Tracks current time for both the seek bar and the Timeline (iOS: audio.currentTime lags when paused)
   const currentTimeRef = useRef(0);
+  // Last time value that was actually drawn to canvas — skip redraw when paused and unchanged
+  const lastDrawnTimeRef = useRef(-1);
   // Undo history — stores snapshots of transcription before each destructive op
   const historyRef = useRef<any[][]>([]);
   // Holds the latest syncAndDraw so the RAF loop never runs a stale closure
@@ -91,69 +93,71 @@ export default function Home() {
 
     if (video && audio && canvas) {
       const ctx = canvas.getContext('2d');
+      const isActive = !audio.paused && !audio.ended;
 
-      // Always draw the current video frame (handles both playback and seek-while-paused)
-      if (ctx && video.videoWidth > 0) {
+      // Update time ref + seekbar every frame while playing
+      if (isActive) {
+        currentTimeRef.current = audio.currentTime;
+        setCurrentTime(audio.currentTime);
+      }
+
+      // Keep video clock in sync with audio during playback
+      if (isActive && Math.abs(video.currentTime - audio.currentTime) > 0.2) {
+        video.currentTime = audio.currentTime;
+      }
+
+      // Skip canvas draw entirely when paused and the frame hasn't changed —
+      // drawImage 60fps while paused is pure waste on mobile
+      const timeChanged = currentTimeRef.current !== lastDrawnTimeRef.current;
+      if (ctx && video.videoWidth > 0 && (isActive || timeChanged)) {
         const targetW = Math.round(video.videoWidth * PREVIEW_SCALE);
         if (canvas.width !== targetW) {
           canvas.width = targetW;
           canvas.height = Math.round(video.videoHeight * PREVIEW_SCALE);
         }
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      }
+        lastDrawnTimeRef.current = currentTimeRef.current;
 
-      // Keep video clock in sync with audio clock during playback
-      if (!video.paused && !video.ended && Math.abs(video.currentTime - audio.currentTime) > 0.2) {
-        video.currentTime = audio.currentTime;
-      }
+        // Draw subtitle on top — drawImage already cleared the previous text
+        if (canvas.width > 0 && transcription.length > 0) {
+          const time = currentTimeRef.current + globalOffset;
+          const wordObj = transcription.find(w => time >= w.start && time <= w.end);
+          if (wordObj) {
+            const index = transcription.findIndex(w => w.start === wordObj.start);
+            const baseSize = [28, 42, 58][index % 3] * fontScale;
+            const fontSize = Math.round(baseSize * (canvas.height / 500));
+            const x = canvas.width / 2;
+            const y = canvas.height - (canvas.height * subtitlePosRef.current / 100);
+            const borderW = Math.max(2, Math.round(2.4 * (canvas.height / 500)));
 
-      if (!audio.paused && !audio.ended) {
-        currentTimeRef.current = audio.currentTime;
-        setCurrentTime(audio.currentTime);
-      }
+            ctx.save();
+            ctx.font = `900 ${fontSize}px "${fontFamilyRef.current}", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
 
-      // Draw subtitle directly on canvas — same font + size formula as FFmpeg export
-      if (ctx && canvas.width > 0 && transcription.length > 0) {
-        const time = currentTimeRef.current + globalOffset;
-        const wordObj = transcription.find(w => time >= w.start && time <= w.end);
-        if (wordObj) {
-          const index = transcription.findIndex(w => w.start === wordObj.start);
-          const baseSize = [28, 42, 58][index % 3] * fontScale;
-          const fontSize = Math.round(baseSize * (canvas.height / 500));
-          const x = canvas.width / 2;
-          const y = canvas.height - (canvas.height * subtitlePosRef.current / 100);
-          const borderW = Math.max(2, Math.round(2.4 * (canvas.height / 500)));
+            ctx.shadowColor = 'transparent';
+            ctx.lineWidth = borderW;
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+            ctx.strokeText(wordObj.word, x, y);
 
-          ctx.save();
-          ctx.font = `900 ${fontSize}px "${fontFamilyRef.current}", sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
+            ctx.shadowColor = 'rgba(0,0,0,0.95)';
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = Math.round(2 * (canvas.height / 500));
+            ctx.shadowBlur = 4;
+            ctx.fillStyle = '#ECE9E4';
+            ctx.fillText(wordObj.word, x, y);
+            ctx.restore();
 
-          // Outline first (no shadow on stroke)
-          ctx.shadowColor = 'transparent';
-          ctx.lineWidth = borderW;
-          ctx.lineJoin = 'round';
-          ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-          ctx.strokeText(wordObj.word, x, y);
-
-          // Fill with drop shadow
-          ctx.shadowColor = 'rgba(0,0,0,0.95)';
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = Math.round(2 * (canvas.height / 500));
-          ctx.shadowBlur = 4;
-          ctx.fillStyle = '#ECE9E4';
-          ctx.fillText(wordObj.word, x, y);
-          ctx.restore();
-
-          // Keep span sized but invisible — used only as the drag hit-target
-          if (subtitleRef.current && lastWordRef.current !== wordObj.word + wordObj.start) {
-            subtitleRef.current.style.display = 'inline-block';
-            subtitleRef.current.style.fontSize = `${[28, 42, 58][index % 3] * fontScale}px`;
-            lastWordRef.current = wordObj.word + wordObj.start;
+            if (subtitleRef.current && lastWordRef.current !== wordObj.word + wordObj.start) {
+              subtitleRef.current.style.display = 'inline-block';
+              subtitleRef.current.style.fontSize = `${[28, 42, 58][index % 3] * fontScale}px`;
+              lastWordRef.current = wordObj.word + wordObj.start;
+            }
+          } else {
+            if (subtitleRef.current) subtitleRef.current.style.display = 'none';
+            lastWordRef.current = '';
           }
-        } else {
-          if (subtitleRef.current) subtitleRef.current.style.display = 'none';
-          lastWordRef.current = '';
         }
       }
     }
@@ -260,6 +264,7 @@ export default function Home() {
     const newTime = parseFloat(e.target.value);
     setCurrentTime(newTime);
     currentTimeRef.current = newTime;
+    lastDrawnTimeRef.current = -1; // force canvas redraw on next frame
     if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
     if (audioRef.current) audioRef.current.currentTime = newTime;
   };
@@ -681,6 +686,7 @@ export default function Home() {
                 onSeek={(t) => {
                   setCurrentTime(t);
                   currentTimeRef.current = t;
+                  lastDrawnTimeRef.current = -1; // force canvas redraw on next frame
                   if (audioRef.current) audioRef.current.currentTime = t;
                   if (videoObjRef.current) videoObjRef.current.currentTime = t;
                 }}

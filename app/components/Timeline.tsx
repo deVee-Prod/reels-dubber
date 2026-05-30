@@ -563,8 +563,9 @@ export default function Timeline({
         onPointerMove={onScrollbarPointerMove}
         onPointerUp={onScrollbarPointerUp}
         onPointerCancel={onScrollbarPointerUp}
-        className="relative mt-2 h-5 rounded-full bg-white/[0.05] overflow-hidden cursor-grab active:cursor-grabbing transition-opacity"
-        style={{ touchAction: 'none' }}
+        onContextMenu={(e) => e.preventDefault()}
+        className="relative mt-2 h-5 rounded-full bg-white/[0.05] overflow-hidden cursor-grab active:cursor-grabbing transition-opacity select-none"
+        style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
       >
         <div
           ref={scrollThumbRef}

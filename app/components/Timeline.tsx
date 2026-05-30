@@ -416,8 +416,8 @@ export default function Timeline({
             {flatWords.map((fw) => {
               const left = fw.start * PX_PER_SEC;
               const width = Math.max(8, (fw.end - fw.start) * PX_PER_SEC);
-              // Handles shrink on narrow blocks so the center body area is always tappable
-              const handleW = Math.min(20, Math.max(0, Math.floor((width - 10) / 2)));
+              // On narrow blocks handles shrink, but always keep ≥6px so they're grabbable
+              const handleW = Math.min(16, Math.max(6, Math.floor(width / 3)));
               const isActive =
                 drag?.fw.chunkIndex === fw.chunkIndex && drag?.fw.wordIndex === fw.wordIndex;
               const isEditing = editingKey === `${fw.chunkIndex}-${fw.wordIndex}`;
@@ -442,8 +442,8 @@ export default function Timeline({
                   style={{ left: `${left}px`, width: `${width}px`, cursor: isEditing ? 'text' : 'grab', touchAction: 'none' }}
                   title={isEditing ? 'Edit word' : `${fw.word} · ${formatTimeFull(fw.start)} → ${formatTimeFull(fw.end)}`}
                 >
-                  {/* Left resize handle — hidden while editing, shrinks on narrow blocks */}
-                  {!isEditing && handleW > 0 && (
+                  {/* Left resize handle */}
+                  {!isEditing && (
                     <div
                       onPointerDown={(e) => onEdgePointerDown(e, fw, 'left')}
                       className="absolute left-0 top-0 h-full cursor-ew-resize bg-black/0 hover:bg-black/40"
@@ -481,13 +481,33 @@ export default function Timeline({
                     </span>
                   )}
 
-                  {/* Right resize handle — hidden while editing, shrinks on narrow blocks */}
-                  {!isEditing && handleW > 0 && (
+                  {/* Right resize handle */}
+                  {!isEditing && (
                     <div
                       onPointerDown={(e) => onEdgePointerDown(e, fw, 'right')}
                       className="absolute right-0 top-0 h-full cursor-ew-resize bg-black/0 hover:bg-black/40"
                       style={{ touchAction: 'none', width: `${handleW}px` }}
                     />
+                  )}
+
+                  {/* Mobile selected-state: large external handles centered on block edges */}
+                  {isSelected && !isEditing && (
+                    <>
+                      <div
+                        onPointerDown={(e) => onEdgePointerDown(e, fw, 'left')}
+                        className="absolute top-1/2 -translate-y-1/2 z-20 flex items-center justify-center cursor-ew-resize"
+                        style={{ touchAction: 'none', width: '36px', height: '48px', left: '-18px' }}
+                      >
+                        <div className="w-[3px] h-7 rounded-full bg-white shadow pointer-events-none" />
+                      </div>
+                      <div
+                        onPointerDown={(e) => onEdgePointerDown(e, fw, 'right')}
+                        className="absolute top-1/2 -translate-y-1/2 z-20 flex items-center justify-center cursor-ew-resize"
+                        style={{ touchAction: 'none', width: '36px', height: '48px', right: '-18px' }}
+                      >
+                        <div className="w-[3px] h-7 rounded-full bg-white shadow pointer-events-none" />
+                      </div>
+                    </>
                   )}
 
                   {/* Delete badge — hover on desktop, always visible in edit/selected mode */}

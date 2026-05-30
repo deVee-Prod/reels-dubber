@@ -415,7 +415,7 @@ export default function Home() {
           const yPos = `h-(h*${subtitlePos}/100)-text_h`;
           const borderW = Math.max(1.5, 1.2 * scaleRatio);
 
-          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=0xECE9E4:bordercolor=black@0.9:borderw=2:shadowx=0:shadowy=2:shadowcolor=black@0.95:box=1:boxcolor=black@0.18:boxborderw=14`;
+          return `drawtext=fontfile='myfont.ttf':text='${safeWord}':enable='between(t,${startT},${endT})':x=(w-text_w)/2:y=${yPos}:fontsize=${fontSize}:fontcolor=0xECE9E4:bordercolor=black@0.9:borderw=2:shadowx=0:shadowy=2:shadowcolor=black@0.95`;
         });
         filterChain += `,${subtitleFilters.join(',')}`;
       }

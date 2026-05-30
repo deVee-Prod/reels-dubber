@@ -108,9 +108,19 @@ export default function Home() {
         setCurrentTime(audio.currentTime);
       }
 
-      // Keep video clock in sync with audio during playback
-      if (isActive && Math.abs(video.currentTime - audio.currentTime) > 0.2) {
-        video.currentTime = audio.currentTime;
+      // Soft-sync video to audio: nudge playbackRate for small drifts,
+      // hard-seek only when drift is large enough that gradual correction won't catch up
+      if (isActive) {
+        const drift = video.currentTime - audio.currentTime;
+        const absDrift = Math.abs(drift);
+        if (absDrift > 0.5) {
+          video.currentTime = audio.currentTime;
+          video.playbackRate = 1.0;
+        } else if (absDrift > 0.08) {
+          video.playbackRate = drift > 0 ? 0.85 : 1.15;
+        } else {
+          video.playbackRate = 1.0;
+        }
       }
 
       // Skip canvas draw entirely when paused and the frame hasn't changed —
@@ -236,9 +246,9 @@ export default function Home() {
     if (!video || !audio) return;
     if (audio.paused) {
       video.muted = true;
+      video.currentTime = audio.currentTime; // pre-sync position before starting
       try {
-        await video.play();
-        await audio.play();
+        await Promise.all([video.play(), audio.play()]);
         setIsPlaying(true);
       } catch (err) {
         console.error("Playback failed", err);

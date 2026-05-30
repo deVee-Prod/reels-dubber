@@ -740,7 +740,7 @@ export default function Home() {
           )}
 
           <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl px-4 py-3">
-            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0">Size</span>
+            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0 select-none">Size</span>
             <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7]" />
           </div>
 

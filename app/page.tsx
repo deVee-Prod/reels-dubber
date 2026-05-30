@@ -333,23 +333,30 @@ export default function Home() {
     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
     try {
       await ffmpeg.writeFile(`temp_input.${ext}`, await fetchFile(file));
-      await ffmpeg.exec(['-i', `temp_input.${ext}`, '-vn', '-ab', '128k', 'output_audio.mp3']);
+      await ffmpeg.exec(['-y', '-i', `temp_input.${ext}`, '-vn', '-ab', '128k', 'output_audio.mp3']);
       const data = await ffmpeg.readFile('output_audio.mp3');
       const audioBlob = new Blob([data as any], { type: 'audio/mp3' });
       const formData = new FormData();
       formData.append('audio', audioBlob);
       const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${response.status}`);
+      }
       const result = await response.json();
-      
+      if (result.error) throw new Error(result.error);
+
       if (result.transcription) {
-        const allWords = Array.isArray(result.transcription[0]?.words) 
-          ? result.transcription[0].words 
+        const allWords = Array.isArray(result.transcription[0]?.words)
+          ? result.transcription[0].words
           : result.transcription.flatMap((t: any) => t.words);
         setTranscription(allWords);
       }
     } catch (error: any) {
       alert(`Error in DUB: ${error.message}`);
     } finally {
+      try { await ffmpeg.deleteFile(`temp_input.${ext}`); } catch {}
+      try { await ffmpeg.deleteFile('output_audio.mp3'); } catch {}
       setIsDubbing(false);
     }
   };

@@ -5,8 +5,13 @@ import Image from 'next/image';
 import Timeline from './components/Timeline';
 
 const FONTS = [
-  { id: 'NotoSansTight', label: 'Noto Tight', file: '/NotoSansTight.ttf' },
-  { id: 'Heebo',         label: 'Heebo',      file: '/Heebo.ttf'         },
+  { id: 'NotoSansTight',       label: 'Noto Tight',   file: '/NotoSansTight.ttf'          },
+  { id: 'Heebo',               label: 'Heebo',         file: '/Heebo.ttf'                  },
+  { id: 'RubikBlack',          label: 'Rubik Black',   file: '/Rubik-Black.ttf'            },
+  { id: 'SecularOne',          label: 'Secular One',   file: '/SecularOne-Regular.ttf'     },
+  { id: 'VarelaRound',         label: 'Varela Round',  file: '/VarelaRound-Regular.ttf'    },
+  { id: 'FrankRuhlLibreBold',  label: 'Frank Ruhl',    file: '/FrankRuhlLibre-Bold.ttf'   },
+  { id: 'NotoSansHebrewBlack', label: 'Noto Hebrew',   file: '/NotoSansHebrew-Black.ttf'  },
 ] as const;
 
 // Canvas preview renders at this fraction of the source resolution —
@@ -43,6 +48,8 @@ export default function Home() {
   const [globalOffset, setGlobalOffset] = useState(0); 
   const [isPlaying, setIsPlaying] = useState(false);
   const [fontFamily, setFontFamily] = useState<FontId>('NotoSansTight');
+  const [loadedFonts, setLoadedFonts] = useState<Set<string>>(new Set());
+  const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -183,7 +190,10 @@ export default function Home() {
   useEffect(() => {
     FONTS.forEach(({ id, file }) => {
       const font = new FontFace(id, `url(${file})`);
-      font.load().then(f => document.fonts.add(f)).catch(() => {});
+      font.load().then(f => {
+        document.fonts.add(f);
+        setLoadedFonts(prev => new Set([...prev, id]));
+      }).catch(() => {});
     });
   }, []);
 
@@ -634,16 +644,40 @@ export default function Home() {
             <span className="text-[8px] font-mono text-[#A855F7] w-7 text-center shrink-0">{Math.round(subtitlePos)}%</span>
             <button onClick={() => setSubtitlePos(prev => Math.min(90, prev + 5))} className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-[10px] active:scale-90 transition-transform">▲</button>
             <div className="w-px h-3.5 bg-white/10 shrink-0 mx-1" />
-            <div className="flex gap-1.5 flex-1 justify-end">
-              {FONTS.map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => setFontFamily(f.id)}
-                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wide transition-all whitespace-nowrap ${fontFamily === f.id ? 'bg-[#A855F7] text-white' : 'bg-white/5 text-white/40 hover:text-white/70 hover:bg-white/10'}`}
-                >
-                  {f.label}
-                </button>
-              ))}
+            {/* Font picker dropdown */}
+            <div className="relative flex-1 flex justify-end">
+              {fontDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setFontDropdownOpen(false)} />
+                  <div className="absolute bottom-full right-0 mb-2 z-20 w-56 rounded-2xl bg-[#111] border border-white/10 overflow-hidden shadow-2xl">
+                    {FONTS.filter(f => loadedFonts.has(f.id)).map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => { setFontFamily(f.id); setFontDropdownOpen(false); }}
+                        className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${fontFamily === f.id ? 'bg-[#A855F7]/20' : 'hover:bg-white/5'}`}
+                      >
+                        <span className="text-[9px] uppercase tracking-widest font-bold text-white/50">{f.label}</span>
+                        <span
+                          className={`text-2xl leading-none ${fontFamily === f.id ? 'text-[#A855F7]' : 'text-white/80'}`}
+                          style={{ fontFamily: f.id }}
+                        >
+                          שלום
+                        </span>
+                      </button>
+                    ))}
+                    {loadedFonts.size === 0 && (
+                      <div className="px-4 py-3 text-[9px] text-white/30 uppercase tracking-widest">Loading fonts…</div>
+                    )}
+                  </div>
+                </>
+              )}
+              <button
+                onClick={() => setFontDropdownOpen(prev => !prev)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-wide transition-all ${fontDropdownOpen ? 'bg-[#A855F7] text-white' : 'bg-white/5 text-white/40 hover:text-white/70 hover:bg-white/10'}`}
+              >
+                <span>{FONTS.find(f => f.id === fontFamily)?.label ?? fontFamily}</span>
+                <span className="opacity-60">{fontDropdownOpen ? '▴' : '▾'}</span>
+              </button>
             </div>
           </div>
 

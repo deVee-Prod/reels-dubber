@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { DriftingGridBackground } from './components/DriftingGridBackground';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,7 +39,10 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} antialiased`}
     >
-      <body className="bg-[#050505] antialiased text-white">{children}</body>
+      <body className="relative min-h-full flex flex-col antialiased text-white">
+        <DriftingGridBackground />
+        <div className="relative z-10 flex flex-col min-h-full">{children}</div>
+      </body>
     </html>
   );
 }

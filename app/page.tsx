@@ -515,7 +515,7 @@ export default function Home() {
 
   if (authStatus === 'checking') {
     return (
-      <div style={{ position: 'fixed', inset: 0, backgroundColor: '#050505', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', padding: '2rem', textAlign: 'center' }}>
+      <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', padding: '2rem', textAlign: 'center' }}>
         <p style={{ color: '#fff', fontSize: '1.125rem', fontFamily: 'sans-serif' }}>Verifying Access...</p>
       </div>
     );
@@ -523,7 +523,7 @@ export default function Home() {
 
   if (authStatus === 'no_access') {
     return (
-      <div style={{ position: 'fixed', inset: 0, backgroundColor: '#050505', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', padding: '2rem', textAlign: 'center' }}>
+      <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', padding: '2rem', textAlign: 'center' }}>
         <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '2rem' }}>🔒</p>
         <p style={{ color: '#fff', fontSize: '1.1rem', fontFamily: 'sans-serif', fontWeight: 600, lineHeight: 1.5, maxWidth: 340 }}>
           This is a Premium Tool.<br />Sign in with Google at deVee Music to get access.
@@ -540,7 +540,7 @@ export default function Home() {
 
   if (!authorized) {
     return (
-      <div className="min-h-[100dvh] w-full bg-[#050505] text-white flex flex-col items-center">
+      <div className="min-h-[100dvh] w-full text-white flex flex-col items-center">
   <header className="w-full text-center space-y-2 pt-8 pb-6 relative z-10">
           <div className="absolute top-6 left-1/2 -translate-x-1/2 w-56 h-20 bg-[#A855F7] blur-[55px] opacity-[0.25] pointer-events-none" />
           <Image src="/logo.png" alt="deVee" width={100} height={32} className="mx-auto relative" />
@@ -572,7 +572,7 @@ export default function Home() {
   }
 
   return (
-  <div className="min-h-[100dvh] w-full bg-[#050505] text-white flex flex-col items-center">
+  <div className="min-h-[100dvh] w-full text-white flex flex-col items-center">
   <header className="w-full text-center space-y-2 pt-8 pb-6 relative z-10">
         <div className="absolute top-6 left-1/2 -translate-x-1/2 w-56 h-20 bg-[#A855F7] blur-[55px] opacity-[0.25] pointer-events-none" />
         <Image src="/logo.png" alt="deVee" width={80} height={26} className="opacity-80 mx-auto relative" />

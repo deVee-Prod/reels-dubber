@@ -18,6 +18,30 @@ const FONTS = [
 // cheaper on mobile, looks identical since the canvas is CSS-scaled anyway.
 const PREVIEW_SCALE = 0.3;
 
+// Gap threshold (seconds) — if the silence between two consecutive words
+// is >= this value, force a group break even if the group isn't full yet.
+const GAP_BREAK_THRESHOLD = 0.5;
+
+/** Group words into lines of *up to* `maxPerLine` words.
+ *  A new group starts whenever:
+ *  1. The current group already has `maxPerLine` words, OR
+ *  2. The gap between the previous word's end and the next word's start >= GAP_BREAK_THRESHOLD */
+function buildWordGroups<T extends { start: number; end: number }>(words: T[], maxPerLine: number): T[][] {
+  if (words.length === 0) return [];
+  const groups: T[][] = [[words[0]]];
+  for (let i = 1; i < words.length; i++) {
+    const current = groups[groups.length - 1];
+    const prev = words[i - 1];
+    const gap = words[i].start - prev.end;
+    if (current.length >= maxPerLine || gap >= GAP_BREAK_THRESHOLD) {
+      groups.push([words[i]]);
+    } else {
+      current.push(words[i]);
+    }
+  }
+  return groups;
+}
+
 type FontId = typeof FONTS[number]['id'];
 
 const formatTime = (time: number) => {
@@ -131,19 +155,21 @@ export default function Home() {
         if (canvas.width > 0 && transcription.length > 0) {
           const time = currentTimeRef.current + globalOffset;
           const wpl = wordsPerLineRef.current;
+          const wordGroups = buildWordGroups(transcription, wpl);
 
           // Find which group of words is currently active
           let activeGroup: typeof transcription | null = null;
           let groupStartIndex = -1;
-          for (let i = 0; i < transcription.length; i += wpl) {
-            const group = transcription.slice(i, i + wpl);
+          let flatIdx = 0;
+          for (const group of wordGroups) {
             const groupStart = group[0].start;
             const groupEnd = group[group.length - 1].end;
             if (time >= groupStart && time <= groupEnd) {
               activeGroup = group;
-              groupStartIndex = i;
+              groupStartIndex = flatIdx;
               break;
             }
+            flatIdx += group.length;
           }
 
           if (activeGroup) {
@@ -421,11 +447,8 @@ export default function Home() {
       if (withSubtitles && transcription.length > 0) {
         const currentOffset = globalOffset;
 
-        // Group words by wordsPerLine — same grouping logic as the canvas preview
-        const groups: typeof transcription[] = [];
-        for (let i = 0; i < transcription.length; i += wordsPerLine) {
-          groups.push(transcription.slice(i, i + wordsPerLine));
-        }
+        // Group words by wordsPerLine — same smart grouping as the canvas preview
+        const groups = buildWordGroups(transcription, wordsPerLine);
 
         const subtitleFilters = groups.map((group, groupIndex) => {
           const baseSize = [28, 42, 58][groupIndex * wordsPerLine % 3] * fontScale;
@@ -772,7 +795,7 @@ export default function Home() {
 
           {/* Words per line selector */}
           <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl px-4 py-3">
-            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0 select-none" dir="rtl">מילים בשורה</span>
+            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0 select-none" dir="rtl">עד __ מילים</span>
             <div className="flex-1 flex items-center justify-center gap-1.5">
               {[1, 2, 3, 4, 5].map((n) => (
                 <button

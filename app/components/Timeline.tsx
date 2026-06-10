@@ -7,6 +7,7 @@ const TRACK_HEIGHT = 56;
 const RULER_HEIGHT = 24;
 const MIN_WORD_DURATION = 0.05;
 const CLICK_THRESHOLD_PX = 5;
+const LONG_PRESS_MS = 500;
 
 function formatTimeShort(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) sec = 0;
@@ -108,10 +109,15 @@ export default function Timeline({
   const lastTapTimeRef = useRef<number>(0);
   const onWordDeleteRef = useRef(onWordDelete);
   useEffect(() => { onWordDeleteRef.current = onWordDelete; });
+  const onWordToggleForceBreakRef = useRef(onWordToggleForceBreak);
+  useEffect(() => { onWordToggleForceBreakRef.current = onWordToggleForceBreak; });
   const onWordTimingChangeRef = useRef(onWordTimingChange);
   useEffect(() => { onWordTimingChangeRef.current = onWordTimingChange; });
   const chunksRef = useRef(chunks);
   useEffect(() => { chunksRef.current = chunks; });
+  // Long-press timer for toggling forceBreak
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFiredRef = useRef(false);
 
   const safeDuration = Math.max(1, Number.isFinite(duration) ? duration : 0);
   const safeDurationRef = useRef(safeDuration);
@@ -224,6 +230,18 @@ export default function Timeline({
       startClientX: e.clientX,
       startClientY: e.clientY,
     });
+
+    // Start long-press timer for forceBreak toggle
+    longPressFiredRef.current = false;
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      longPressFiredRef.current = true;
+      if (onWordToggleForceBreakRef.current) {
+        onWordToggleForceBreakRef.current(fw.chunkIndex, fw.wordIndex);
+      }
+      // Vibrate on mobile for tactile feedback
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(50);
+    }, LONG_PRESS_MS);
   }
 
   useEffect(() => {
@@ -231,6 +249,15 @@ export default function Timeline({
 
     function onMove(e: PointerEvent) {
       if (!drag) return;
+      // Cancel long-press if pointer moved (it's a drag, not a hold)
+      if (longPressTimerRef.current) {
+        const movedX = Math.abs(e.clientX - drag.startClientX);
+        const movedY = Math.abs(e.clientY - drag.startClientY);
+        if (movedX > 5 || movedY > 5) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+      }
       const words = chunksRef.current[drag.fw.chunkIndex].words;
       const dur = safeDurationRef.current;
       let patch: Partial<Word> = {};
@@ -269,7 +296,21 @@ export default function Timeline({
     }
 
     function onUp(e: PointerEvent) {
+      // Cancel long-press timer
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+
       if (drag) {
+        // If long press already fired, skip tap/click logic
+        if (longPressFiredRef.current) {
+          longPressFiredRef.current = false;
+          setDrag(null);
+          setTooltip(null);
+          return;
+        }
+
         const movedX = Math.abs(e.clientX - drag.startClientX);
         const movedY = Math.abs(e.clientY - drag.startClientY);
         // Use a larger threshold for touch — fingers are less precise than cursors
@@ -441,6 +482,7 @@ export default function Timeline({
               const isSelected = selectedKey === `${fw.chunkIndex}-${fw.wordIndex}`;
               const cls = [
                 'group absolute top-0 flex h-full items-center rounded-sm transition-colors',
+                fw.forceBreak ? 'border-l-[3px] border-l-orange-400' : '',
                 isEditing  ? 'bg-[#6B21A8] ring-2 ring-[#A855F7]' :
                 isSelected ? 'bg-[#7C3AED] ring-2 ring-red-400/70 z-10' :
                 isActive   ? 'bg-[#A855F7] z-10 ring-2 ring-white/80' :
@@ -450,14 +492,9 @@ export default function Timeline({
                 <div
                   key={`${fw.chunkIndex}-${fw.wordIndex}`}
                   onPointerDown={(e) => onBodyPointerDown(e, fw)}
-                  onDoubleClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (onWordToggleForceBreak) onWordToggleForceBreak(fw.chunkIndex, fw.wordIndex);
-                  }}
                   className={cls.join(' ')}
                   style={{ left: `${left}px`, width: `${width}px`, cursor: isEditing ? 'text' : 'grab', touchAction: 'none' }}
-                  title={isEditing ? 'Edit word' : `${fw.word} · ${formatTimeFull(fw.start)} → ${formatTimeFull(fw.end)}`}
+                  title={isEditing ? 'Edit word' : `${fw.word} · ${formatTimeFull(fw.start)} → ${formatTimeFull(fw.end)}${fw.forceBreak ? ' ✂ force break' : ''}`}
                 >
                   {/* Left resize handle */}
                   {!isEditing && (

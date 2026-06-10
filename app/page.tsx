@@ -26,14 +26,18 @@ const GAP_BREAK_THRESHOLD = 0.5;
  *  A new group starts whenever:
  *  1. The current group already has `maxPerLine` words, OR
  *  2. The gap between the previous word's end and the next word's start >= GAP_BREAK_THRESHOLD */
-function buildWordGroups<T extends { start: number; end: number }>(words: T[], maxPerLine: number): T[][] {
+function buildWordGroups<T extends { start: number; end: number; forceBreak?: boolean }>(words: T[], maxPerLine: number): T[][] {
   if (words.length === 0) return [];
   const groups: T[][] = [[words[0]]];
   for (let i = 1; i < words.length; i++) {
     const current = groups[groups.length - 1];
     const prev = words[i - 1];
     const gap = words[i].start - prev.end;
-    if (current.length >= maxPerLine || gap >= GAP_BREAK_THRESHOLD) {
+    // Start a new group if:
+    // 1. Current group is full, OR
+    // 2. Gap between words >= threshold, OR
+    // 3. The current word has forceBreak flag (user manually forced a line break here)
+    if (current.length >= maxPerLine || gap >= GAP_BREAK_THRESHOLD || words[i].forceBreak) {
       groups.push([words[i]]);
     } else {
       current.push(words[i]);
@@ -135,7 +139,7 @@ export default function Home() {
       }
 
       // Keep video clock in sync with audio during playback
-      if (isActive && Math.abs(video.currentTime - audio.currentTime) > 0.2) {
+      if (isActive && Math.abs(video.currentTime - audio.currentTime) > 0.05) {
         video.currentTime = audio.currentTime;
       }
 
@@ -752,7 +756,7 @@ export default function Home() {
                 chunks={[{
                   start: transcription[0].start,
                   end: transcription[transcription.length - 1].end,
-                  words: transcription.map(item => ({ word: item.word, start: item.start, end: item.end })),
+                words: transcription.map(item => ({ word: item.word, start: item.start, end: item.end, forceBreak: !!item.forceBreak })),
                 }]}
                 duration={duration}
                 getCurrentTime={getTimeCallback}
@@ -772,6 +776,12 @@ export default function Home() {
                 onWordDelete={(_chunkIndex, wordIndex) => {
                   pushHistory(transcription);
                   setTranscription(prev => prev.filter((_, i) => i !== wordIndex));
+                }}
+                onWordToggleForceBreak={(_chunkIndex, wordIndex) => {
+                  pushHistory(transcription);
+                  setTranscription(prev => prev.map((item, i) =>
+                    i === wordIndex ? { ...item, forceBreak: !item.forceBreak } : item
+                  ));
                 }}
                 onSeek={(t) => {
                   setCurrentTime(t);

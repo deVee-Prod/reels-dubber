@@ -321,7 +321,6 @@ export default function Home() {
     setCurrentTime(newTime);
     currentTimeRef.current = newTime;
     lastDrawnTimeRef.current = -1; // force canvas redraw on next frame
-    if (videoObjRef.current) videoObjRef.current.currentTime = newTime;
     if (audioRef.current) audioRef.current.currentTime = newTime;
   };
 

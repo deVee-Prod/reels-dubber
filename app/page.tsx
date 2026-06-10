@@ -50,6 +50,7 @@ export default function Home() {
   const [fontFamily, setFontFamily] = useState<FontId>('NotoSansTight');
   const [loadedFonts, setLoadedFonts] = useState<Set<string>>(new Set());
   const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
+  const [wordsPerLine, setWordsPerLine] = useState(1);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -62,6 +63,7 @@ export default function Home() {
   // Refs so syncAndDraw always reads live values without closing over stale state
   const subtitlePosRef = useRef(30);
   const fontFamilyRef  = useRef<FontId>('NotoSansTight');
+  const wordsPerLineRef = useRef(1);
   // Tracks current time for both the seek bar and the Timeline (iOS: audio.currentTime lags when paused)
   const currentTimeRef = useRef(0);
   // Last time value that was actually drawn to canvas — skip redraw when paused and unchanged
@@ -128,10 +130,25 @@ export default function Home() {
         // Draw subtitle on top — drawImage already cleared the previous text
         if (canvas.width > 0 && transcription.length > 0) {
           const time = currentTimeRef.current + globalOffset;
-          const wordObj = transcription.find(w => time >= w.start && time <= w.end);
-          if (wordObj) {
-            const index = transcription.findIndex(w => w.start === wordObj.start);
-            const baseSize = [28, 42, 58][index % 3] * fontScale;
+          const wpl = wordsPerLineRef.current;
+
+          // Find which group of words is currently active
+          let activeGroup: typeof transcription | null = null;
+          let groupStartIndex = -1;
+          for (let i = 0; i < transcription.length; i += wpl) {
+            const group = transcription.slice(i, i + wpl);
+            const groupStart = group[0].start;
+            const groupEnd = group[group.length - 1].end;
+            if (time >= groupStart && time <= groupEnd) {
+              activeGroup = group;
+              groupStartIndex = i;
+              break;
+            }
+          }
+
+          if (activeGroup) {
+            const lineText = activeGroup.map((w: any) => w.word).join(' ');
+            const baseSize = [28, 42, 58][groupStartIndex % 3] * fontScale;
             const fontSize = Math.round(baseSize * (canvas.height / 500));
             const x = canvas.width / 2;
             const y = canvas.height - (canvas.height * subtitlePosRef.current / 100);
@@ -146,20 +163,21 @@ export default function Home() {
             ctx.lineWidth = borderW;
             ctx.lineJoin = 'round';
             ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-            ctx.strokeText(wordObj.word, x, y);
+            ctx.strokeText(lineText, x, y);
 
             ctx.shadowColor = 'rgba(0,0,0,0.95)';
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = Math.round(2 * (canvas.height / 500));
             ctx.shadowBlur = 4;
             ctx.fillStyle = '#ECE9E4';
-            ctx.fillText(wordObj.word, x, y);
+            ctx.fillText(lineText, x, y);
             ctx.restore();
 
-            if (subtitleRef.current && lastWordRef.current !== wordObj.word + wordObj.start) {
+            const groupKey = lineText + activeGroup[0].start;
+            if (subtitleRef.current && lastWordRef.current !== groupKey) {
               subtitleRef.current.style.display = 'inline-block';
-              subtitleRef.current.style.fontSize = `${[28, 42, 58][index % 3] * fontScale}px`;
-              lastWordRef.current = wordObj.word + wordObj.start;
+              subtitleRef.current.style.fontSize = `${[28, 42, 58][groupStartIndex % 3] * fontScale}px`;
+              lastWordRef.current = groupKey;
             }
           } else {
             if (subtitleRef.current) subtitleRef.current.style.display = 'none';
@@ -185,6 +203,7 @@ export default function Home() {
 
   useEffect(() => { subtitlePosRef.current = subtitlePos; }, [subtitlePos]);
   useEffect(() => { fontFamilyRef.current = fontFamily; }, [fontFamily]);
+  useEffect(() => { wordsPerLineRef.current = wordsPerLine; }, [wordsPerLine]);
 
   // Pre-load all fonts into the browser registry so canvas uses them immediately
   useEffect(() => {
@@ -402,18 +421,25 @@ export default function Home() {
       if (withSubtitles && transcription.length > 0) {
         const currentOffset = globalOffset;
 
-        const subtitleFilters = transcription.map((item, index) => {
-          const baseSize = [28, 42, 58][index % 3] * fontScale;
+        // Group words by wordsPerLine — same grouping logic as the canvas preview
+        const groups: typeof transcription[] = [];
+        for (let i = 0; i < transcription.length; i += wordsPerLine) {
+          groups.push(transcription.slice(i, i + wordsPerLine));
+        }
+
+        const subtitleFilters = groups.map((group, groupIndex) => {
+          const baseSize = [28, 42, 58][groupIndex * wordsPerLine % 3] * fontScale;
           const fontSize = Math.round(baseSize * scaleRatio); 
           
-          let safeWord = item.word.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
+          const lineText = group.map((w: any) => w.word).join(' ');
+          let safeWord = lineText.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
           
-          const startT = Math.max(0, Number((item.start + currentOffset).toFixed(3)));
-          let endT = Math.max(0, Number((item.end + currentOffset).toFixed(3)));
+          const startT = Math.max(0, Number((group[0].start + currentOffset).toFixed(3)));
+          let endT = Math.max(0, Number((group[group.length - 1].end + currentOffset).toFixed(3)));
           
-          const nextItem = transcription[index + 1];
-          if (nextItem) {
-              const nextStartT = Math.max(0, Number((nextItem.start + currentOffset).toFixed(3)));
+          const nextGroup = groups[groupIndex + 1];
+          if (nextGroup) {
+              const nextStartT = Math.max(0, Number((nextGroup[0].start + currentOffset).toFixed(3)));
               if (endT > nextStartT) {
                   endT = Math.max(startT + 0.05, nextStartT - 0.01); 
               }
@@ -742,6 +768,26 @@ export default function Home() {
           <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl px-4 py-3">
             <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0 select-none">Size</span>
             <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7]" />
+          </div>
+
+          {/* Words per line selector */}
+          <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl px-4 py-3">
+            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0 select-none" dir="rtl">מילים בשורה</span>
+            <div className="flex-1 flex items-center justify-center gap-1.5">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setWordsPerLine(n)}
+                  className={`w-8 h-8 rounded-lg text-[11px] font-bold transition-all ${
+                    wordsPerLine === n
+                      ? 'bg-[#A855F7] text-white shadow-[0_0_12px_rgba(168,85,247,0.4)]'
+                      : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/70'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex flex-col gap-3 md:gap-4 pb-4">

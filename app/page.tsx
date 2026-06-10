@@ -87,12 +87,11 @@ export default function Home() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLVideoElement>(null);
   const subtitleRef = useRef<HTMLSpanElement>(null);
   const ffmpegRef = useRef<any>(null);
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
-  const videoObjRef = useRef<HTMLVideoElement | null>(null);
   // Refs so syncAndDraw always reads live values without closing over stale state
   const subtitlePosRef = useRef(30);
   const fontFamilyRef  = useRef<FontId>('NotoSansTight');
@@ -109,7 +108,7 @@ export default function Home() {
   const togglePlayRef = useRef<() => Promise<void>>(async () => {});
   // Performance: throttle React re-renders for the seekbar and video sync seeks
   const lastUIUpdateRef = useRef(0);
-  const lastSyncRef = useRef(0);
+  const lastDrawTimeMsRef = useRef(0);
   // Responsive preview scale — detect once, stays stable
   const previewScaleRef = useRef(
     typeof window !== 'undefined' && window.innerWidth < 768
@@ -138,47 +137,39 @@ export default function Home() {
   }, []);
 
   const syncAndDraw = () => {
-    const video = videoObjRef.current;
-    const audio = audioRef.current;
+    const media = audioRef.current;
     const canvas = canvasRef.current;
 
-    if (video && audio && canvas) {
+    if (media && canvas) {
       const ctx = canvas.getContext('2d');
-      const isActive = !audio.paused && !audio.ended;
+      const isActive = !media.paused && !media.ended;
 
       // Update time ref every frame while playing (keeps subtitles accurate).
       // Throttle the React setState to ~15fps — the seekbar doesn't need 60fps.
       if (isActive) {
-        currentTimeRef.current = audio.currentTime;
+        currentTimeRef.current = media.currentTime;
         const now = performance.now();
         if (now - lastUIUpdateRef.current > 66) {
-          setCurrentTime(audio.currentTime);
+          setCurrentTime(media.currentTime);
           lastUIUpdateRef.current = now;
         }
       }
 
-      // Keep video clock in sync with audio during playback.
-      // Seeking is expensive on mobile, so only correct large drifts and
-      // enforce a cooldown to avoid seeking every frame.
-      if (isActive && Math.abs(video.currentTime - audio.currentTime) > SYNC_THRESHOLD) {
-        const now = performance.now();
-        if (now - lastSyncRef.current > SYNC_COOLDOWN) {
-          video.currentTime = audio.currentTime;
-          lastSyncRef.current = now;
-        }
-      }
-
-      // Skip canvas draw entirely when paused and the frame hasn't changed —
-      // drawImage 60fps while paused is pure waste on mobile
       const timeChanged = currentTimeRef.current !== lastDrawnTimeRef.current;
-      if (ctx && video.videoWidth > 0 && (isActive || timeChanged)) {
+      const now = performance.now();
+      
+      // Throttle canvas drawing to ~30fps when playing to save mobile battery and prevent stutter
+      const shouldDraw = isActive ? (now - lastDrawTimeMsRef.current > 33) : timeChanged;
+
+      if (ctx && media.videoWidth > 0 && shouldDraw) {
+        if (isActive) lastDrawTimeMsRef.current = now;
         const scale = previewScaleRef.current;
-        const targetW = Math.round(video.videoWidth * scale);
+        const targetW = Math.round(media.videoWidth * scale);
         if (canvas.width !== targetW) {
           canvas.width = targetW;
-          canvas.height = Math.round(video.videoHeight * scale);
+          canvas.height = Math.round(media.videoHeight * scale);
         }
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(media, 0, 0, canvas.width, canvas.height);
         lastDrawnTimeRef.current = currentTimeRef.current;
 
         // Draw subtitle on top — drawImage already cleared the previous text
@@ -284,43 +275,23 @@ export default function Home() {
       setTranscription([]); 
       setIsPlaying(false);
       setCurrentTime(0);
-
-      const video = document.createElement('video');
-      video.src = url;
-      video.muted = true;
-      video.playsInline = true;
-      video.setAttribute('playsinline', 'true');
-      video.setAttribute('webkit-playsinline', 'true');
-      
-      video.addEventListener('loadeddata', () => {
-        const ctx = canvasRef.current?.getContext('2d');
-        if (ctx && canvasRef.current && video.videoWidth > 0) {
-           canvasRef.current.width = Math.round(video.videoWidth * previewScaleRef.current);
-           canvasRef.current.height = Math.round(video.videoHeight * previewScaleRef.current);
-           ctx.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
-        }
-      });
-      video.load();
-      videoObjRef.current = video;
+      currentTimeRef.current = 0;
+      lastDrawnTimeRef.current = -1;
     }
   };
 
   const togglePlay = async () => {
-    const video = videoObjRef.current;
-    const audio = audioRef.current;
-    if (!video || !audio) return;
-    if (audio.paused) {
-      video.muted = true;
-      video.currentTime = audio.currentTime; // pre-sync position before starting
+    const media = audioRef.current;
+    if (!media) return;
+    if (media.paused) {
       try {
-        await Promise.all([video.play(), audio.play()]);
+        await media.play();
         setIsPlaying(true);
       } catch (err) {
         console.error("Playback failed", err);
       }
     } else {
-      video.pause();
-      audio.pause();
+      media.pause();
       setIsPlaying(false);
     }
   };
@@ -452,7 +423,7 @@ export default function Home() {
       const inputPath = `input_${Date.now()}.${ext}`;
       const outputPath = `output_${Date.now()}.${ext}`;
 
-      const videoH = videoObjRef.current?.videoHeight || 1920;
+      const videoH = audioRef.current?.videoHeight || 1920;
       // 500 is the reference height — matches the canvas drawing formula exactly
       const scaleRatio = videoH / 500;
 
@@ -663,7 +634,7 @@ export default function Home() {
           <div className="relative w-full h-[48vh] md:h-auto md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
-                <audio ref={audioRef} src={videoPreview} preload="auto" className="hidden" playsInline onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />
+                <video ref={audioRef} src={videoPreview} preload="auto" style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} playsInline onLoadedData={() => { lastDrawnTimeRef.current = -1; }} onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />
                 <canvas ref={canvasRef} className="w-full h-full object-contain" />
                 
                 {isExporting && (

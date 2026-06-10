@@ -16,7 +16,12 @@ const FONTS = [
 
 // Canvas preview renders at this fraction of the source resolution —
 // cheaper on mobile, looks identical since the canvas is CSS-scaled anyway.
-const PREVIEW_SCALE = 0.3;
+const PREVIEW_SCALE_DESKTOP = 0.3;
+const PREVIEW_SCALE_MOBILE  = 0.2;
+
+// Video-to-audio sync: don't seek the video element more often than this
+const SYNC_THRESHOLD = 0.15;   // seconds of drift before correcting
+const SYNC_COOLDOWN  = 2000;   // ms — minimum gap between two seeks
 
 // Gap threshold (seconds) — if the silence between two consecutive words
 // is >= this value, force a group break even if the group isn't full yet.
@@ -102,6 +107,15 @@ export default function Home() {
   const syncAndDrawRef = useRef<() => void>(() => {});
   // Ref to latest togglePlay so spacebar listener never captures a stale closure
   const togglePlayRef = useRef<() => Promise<void>>(async () => {});
+  // Performance: throttle React re-renders for the seekbar and video sync seeks
+  const lastUIUpdateRef = useRef(0);
+  const lastSyncRef = useRef(0);
+  // Responsive preview scale — detect once, stays stable
+  const previewScaleRef = useRef(
+    typeof window !== 'undefined' && window.innerWidth < 768
+      ? PREVIEW_SCALE_MOBILE
+      : PREVIEW_SCALE_DESKTOP
+  );
 
   // Stable callbacks for Timeline — empty deps means same reference every render,
   // so Timeline's RAF effect never restarts and the playhead loop runs without interruption
@@ -132,25 +146,37 @@ export default function Home() {
       const ctx = canvas.getContext('2d');
       const isActive = !audio.paused && !audio.ended;
 
-      // Update time ref + seekbar every frame while playing
+      // Update time ref every frame while playing (keeps subtitles accurate).
+      // Throttle the React setState to ~15fps — the seekbar doesn't need 60fps.
       if (isActive) {
         currentTimeRef.current = audio.currentTime;
-        setCurrentTime(audio.currentTime);
+        const now = performance.now();
+        if (now - lastUIUpdateRef.current > 66) {
+          setCurrentTime(audio.currentTime);
+          lastUIUpdateRef.current = now;
+        }
       }
 
-      // Keep video clock in sync with audio during playback
-      if (isActive && Math.abs(video.currentTime - audio.currentTime) > 0.05) {
-        video.currentTime = audio.currentTime;
+      // Keep video clock in sync with audio during playback.
+      // Seeking is expensive on mobile, so only correct large drifts and
+      // enforce a cooldown to avoid seeking every frame.
+      if (isActive && Math.abs(video.currentTime - audio.currentTime) > SYNC_THRESHOLD) {
+        const now = performance.now();
+        if (now - lastSyncRef.current > SYNC_COOLDOWN) {
+          video.currentTime = audio.currentTime;
+          lastSyncRef.current = now;
+        }
       }
 
       // Skip canvas draw entirely when paused and the frame hasn't changed —
       // drawImage 60fps while paused is pure waste on mobile
       const timeChanged = currentTimeRef.current !== lastDrawnTimeRef.current;
       if (ctx && video.videoWidth > 0 && (isActive || timeChanged)) {
-        const targetW = Math.round(video.videoWidth * PREVIEW_SCALE);
+        const scale = previewScaleRef.current;
+        const targetW = Math.round(video.videoWidth * scale);
         if (canvas.width !== targetW) {
           canvas.width = targetW;
-          canvas.height = Math.round(video.videoHeight * PREVIEW_SCALE);
+          canvas.height = Math.round(video.videoHeight * scale);
         }
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         lastDrawnTimeRef.current = currentTimeRef.current;
@@ -269,8 +295,8 @@ export default function Home() {
       video.addEventListener('loadeddata', () => {
         const ctx = canvasRef.current?.getContext('2d');
         if (ctx && canvasRef.current && video.videoWidth > 0) {
-           canvasRef.current.width = Math.round(video.videoWidth * PREVIEW_SCALE);
-           canvasRef.current.height = Math.round(video.videoHeight * PREVIEW_SCALE);
+           canvasRef.current.width = Math.round(video.videoWidth * previewScaleRef.current);
+           canvasRef.current.height = Math.round(video.videoHeight * previewScaleRef.current);
            ctx.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
         }
       });

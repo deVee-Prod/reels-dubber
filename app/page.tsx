@@ -648,6 +648,13 @@ export default function Home() {
                     <p className="text-[10px] font-black tracking-[0.5em] text-white uppercase animate-pulse">Burning {exportProgress}%</p>
                   </div>
                 )}
+                
+                {isDubbing && (
+                  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm">
+                    <div className="w-8 h-8 border-2 border-white/10 border-t-[#A855F7] rounded-full mb-4 animate-spin" />
+                    <p className="text-[10px] font-black tracking-[0.5em] text-white uppercase animate-pulse">Dubbing...</p>
+                  </div>
+                )}
 
                 {!isPlaying && !isExporting && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30">

@@ -109,6 +109,7 @@ export default function Home() {
   // Performance: throttle React re-renders for the seekbar and video sync seeks
   const lastUIUpdateRef = useRef(0);
   const lastDrawTimeMsRef = useRef(0);
+  const hasAutoAnalyzed = useRef(false);
   // Responsive preview scale — detect once, stays stable
   const previewScaleRef = useRef(
     typeof window !== 'undefined' && window.innerWidth < 768
@@ -267,14 +268,9 @@ export default function Home() {
     const uploadedFile = e.target.files?.[0];
     if (uploadedFile) {
       if (videoPreview) URL.revokeObjectURL(videoPreview);
-      setFile(uploadedFile);
-      const buffer = await uploadedFile.arrayBuffer();
-      const blob = new Blob([buffer], { type: uploadedFile.type }); 
-      const url = URL.createObjectURL(blob);
+      setFile(uploadedFile); setTranscription([]); setIsPlaying(false); setCurrentTime(0); hasAutoAnalyzed.current = false;
+      const url = URL.createObjectURL(new Blob([await uploadedFile.arrayBuffer()], { type: uploadedFile.type }));
       setVideoPreview(url);
-      setTranscription([]); 
-      setIsPlaying(false);
-      setCurrentTime(0);
       currentTimeRef.current = 0;
       lastDrawnTimeRef.current = -1;
     }
@@ -363,6 +359,14 @@ export default function Home() {
       loadFFmpeg();
     }
   }, []);
+
+  useEffect(() => {
+    if (file && duration > 0 && !hasAutoAnalyzed.current && !isDubbing) {
+      hasAutoAnalyzed.current = true;
+      handleDub();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [file, duration]);
 
   const handleDub = async () => {
     if (!file) return;
@@ -820,22 +824,8 @@ export default function Home() {
 
           <div className="flex flex-col gap-3 md:gap-4 pb-4">
             <div className="flex items-center gap-3">
-              <button 
-                onClick={handleDub} 
-                disabled={!file || isDubbing} 
-                className={`flex-[3] py-4 rounded-full uppercase tracking-[0.4em] text-[9px] font-black transition-all ${file && !isDubbing ? 'bg-[#A855F7] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'bg-white/5 text-white/20'}`}
-              >
-                {isDubbing ? 'Syncing...' : '1. DUB!'}
-              </button>
-              
               {file && transcription.length === 0 && !isDubbing && (
-                <button 
-                  onClick={() => exportVideo(false)} 
-                  disabled={isExporting} 
-                  className="flex-1 py-4 border border-white/10 rounded-full uppercase tracking-[0.4em] text-[8px] font-bold text-white/40 hover:bg-white/5 transition-all text-center"
-                >
-                  Test
-                </button>
+                <div className="w-full text-center text-[8px] uppercase tracking-[0.3em] text-white/10 font-bold">Waiting for Auto Dub...</div>
               )}
             </div>
 

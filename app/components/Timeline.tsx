@@ -439,7 +439,7 @@ export default function Timeline({
           className="relative select-none"
           style={{ width: `${totalWidth}px`, height: `${RULER_HEIGHT + TRACK_HEIGHT + 10}px` }}
         >
-          {/* Ruler — click to seek */}
+          {/* Ruler (Expanded hit area) */}
           <div
             onPointerDown={(e) => {
               commitCurrentEdit();
@@ -447,23 +447,17 @@ export default function Timeline({
               selectedKeyRef.current = null;
               if (!onSeek || !trackRef.current) return;
               const rect = trackRef.current.getBoundingClientRect();
-              const x = Math.max(0, e.clientX - rect.left);
-              onSeek(x / PX_PER_SEC);
+              onSeek(Math.max(0, e.clientX - rect.left) / PX_PER_SEC);
             }}
-            className="absolute inset-x-0 top-0 h-6 cursor-pointer border-b border-white/5"
+            className="absolute inset-x-0 -top-8 h-14 cursor-pointer"
           >
             {markers.map((m) => (
-              <div
-                key={m}
-                className="pointer-events-none absolute top-0 h-full"
-                style={{ left: `${m * PX_PER_SEC}px` }}
-              >
+              <div key={m} className="pointer-events-none absolute bottom-0 h-6" style={{ left: `${m * PX_PER_SEC}px` }}>
                 <div className="h-full w-px bg-white/10" />
-                <span className="absolute left-1 top-0 font-mono text-[10px] text-white/40">
-                  {formatTimeShort(m)}
-                </span>
+                <span className="absolute left-1 top-0 font-mono text-[10px] text-white/40">{formatTimeShort(m)}</span>
               </div>
             ))}
+            <div className="absolute bottom-0 left-0 right-0 border-b border-white/5 pointer-events-none" />
           </div>
 
           {/* Word blocks */}

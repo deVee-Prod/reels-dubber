@@ -77,13 +77,13 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0); 
   const [duration, setDuration] = useState(0); 
   const [subtitlePos, setSubtitlePos] = useState(30);
-  const [fontScale, setFontScale] = useState(1);
+  const [fontScale, setFontScale] = useState(0.6);
   const [globalOffset, setGlobalOffset] = useState(0); 
   const [isPlaying, setIsPlaying] = useState(false);
   const [fontFamily, setFontFamily] = useState<FontId>('NotoSansTight');
   const [loadedFonts, setLoadedFonts] = useState<Set<string>>(new Set());
   const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
-  const [wordsPerLine, setWordsPerLine] = useState(1);
+  const [wordsPerLine, setWordsPerLine] = useState(2);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -95,7 +95,7 @@ export default function Home() {
   // Refs so syncAndDraw always reads live values without closing over stale state
   const subtitlePosRef = useRef(30);
   const fontFamilyRef  = useRef<FontId>('NotoSansTight');
-  const wordsPerLineRef = useRef(1);
+  const wordsPerLineRef = useRef(2);
   // Tracks current time for both the seek bar and the Timeline (iOS: audio.currentTime lags when paused)
   const currentTimeRef = useRef(0);
   // Last time value that was actually drawn to canvas — skip redraw when paused and unchanged

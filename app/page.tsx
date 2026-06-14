@@ -561,7 +561,7 @@ export default function Home() {
     <footer className="w-full py-8 flex flex-col items-center space-y-4 mt-auto z-10">
       <p className="text-[10px] tracking-[0.2em] font-medium text-white/60">Powered By deVee Boutique Label</p>
       <div className="w-12 h-12 rounded-full overflow-hidden">
-         <Image src="/label_logo.jpg" alt="deVee Label" width={48} height={48} className="object-cover" />
+         <Image src="/label_logo.png" alt="deVee Label" width={48} height={48} className="object-cover" />
       </div>
     </footer>
   );

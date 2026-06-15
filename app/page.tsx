@@ -78,6 +78,7 @@ export default function Home() {
   const [duration, setDuration] = useState(0); 
   const [subtitlePos, setSubtitlePos] = useState(30);
   const [fontScale, setFontScale] = useState(0.6);
+  const [enablePump, setEnablePump] = useState(true);
   const [globalOffset, setGlobalOffset] = useState(0); 
   const [isPlaying, setIsPlaying] = useState(false);
   const [fontFamily, setFontFamily] = useState<FontId>('NotoSansTight');
@@ -196,7 +197,7 @@ export default function Home() {
 
           if (activeGroup) {
             const lineText = activeGroup.map((w: any) => w.word).join(' ');
-            const baseSize = [28, 42, 58][groupStartIndex % 3] * fontScale;
+            const baseSize = (enablePump ? [28, 42, 58][groupStartIndex % 3] : 42) * fontScale;
             const fontSize = Math.round(baseSize * (canvas.height / 500));
             const x = canvas.width / 2;
             const y = canvas.height - (canvas.height * subtitlePosRef.current / 100);
@@ -224,7 +225,7 @@ export default function Home() {
             const groupKey = lineText + activeGroup[0].start;
             if (subtitleRef.current && lastWordRef.current !== groupKey) {
               subtitleRef.current.style.display = 'inline-block';
-              subtitleRef.current.style.fontSize = `${[28, 42, 58][groupStartIndex % 3] * fontScale}px`;
+              subtitleRef.current.style.fontSize = `${(enablePump ? [28, 42, 58][groupStartIndex % 3] : 42) * fontScale}px`;
               lastWordRef.current = groupKey;
             }
           } else {
@@ -455,8 +456,8 @@ export default function Home() {
         const groups = buildWordGroups(transcription, wordsPerLine);
 
         const subtitleFilters = groups.map((group, groupIndex) => {
-          const baseSize = [28, 42, 58][groupIndex * wordsPerLine % 3] * fontScale;
-          const fontSize = Math.round(baseSize * scaleRatio); 
+          const baseSize = (enablePump ? [28, 42, 58][groupIndex * wordsPerLine % 3] : 42) * fontScale;
+          const fontSize = Math.round(baseSize * scaleRatio);
           
           const lineText = group.map((w: any) => w.word).join(' ');
           let safeWord = lineText.replace(/'/g, "").replace(/:/g, "\\:").replace(/,/g, "\\,");
@@ -807,6 +808,12 @@ export default function Home() {
           <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl px-4 py-3">
             <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0 select-none">Size</span>
             <input type="range" min="0.5" max="1.5" step="0.01" value={fontScale} onChange={(e) => setFontScale(parseFloat(e.target.value))} className="flex-1 accent-[#A855F7]" />
+            <button
+              onClick={() => setEnablePump(p => !p)}
+              className={`ml-2 px-3 py-1.5 rounded-lg text-[8px] uppercase tracking-widest font-bold transition-all ${enablePump ? 'bg-[#A855F7]/20 text-[#A855F7] border border-[#A855F7]/30' : 'bg-white/5 text-white/30 border border-white/5'}`}
+            >
+              Pump {enablePump ? 'ON' : 'OFF'}
+            </button>
           </div>
 
           {/* Words per line selector */}

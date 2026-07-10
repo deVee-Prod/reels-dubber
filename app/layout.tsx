@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Reels Dubber",
-  description: "Dub your reels and videos to any language instantly with Reels Dubber by deVee.",
+  description: "Automatically generate subtitles for your video.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

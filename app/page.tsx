@@ -442,7 +442,7 @@ export default function Home() {
         await ffmpeg.writeFile('myfont.ttf', new Uint8Array(fontBuffer));
       } catch (e) {
         console.error("Font loading error:", e);
-        alert("הפונט לא נמצא בשרת");
+        alert("Font not found on server");
         setIsExporting(false);
         return;
       }
@@ -510,7 +510,7 @@ export default function Home() {
 
     } catch (err: any) {
       console.error("Export failed:", err);
-      alert("הייצוא נכשל: " + err.message);
+      alert("Export failed: " + err.message);
     } finally {
       setIsExporting(false);
       setExportProgress(0);
@@ -583,7 +583,7 @@ export default function Home() {
           This is a Premium Tool.<br />Sign in with Google at deVee Music to get access.
         </p>
         <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.9rem', fontFamily: 'sans-serif', lineHeight: 1.6, maxWidth: 320 }}>
-          זהו כלי פרימיום.<br />התחבר עם חשבון Google שלך באתר deVee Music כדי לקבל גישה.
+          This is a premium tool.<br />Login with your Google account on deVee Music to get access.
         </p>
         <a href="https://devee-music.com" style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', fontFamily: 'sans-serif', textDecoration: 'none', letterSpacing: '0.05em' }}>
           ← Back to deVee Music
@@ -606,7 +606,7 @@ export default function Home() {
               <span className="text-[#A855F7] text-[9px] tracking-[0.35em] uppercase font-semibold">AI Vocal Dubbing</span>
               <div className="h-px w-8 bg-[#A855F7]/30" />
             </div>
-            <p dir="rtl" className="text-white text-[11px] tracking-[0.05em] font-light">דיבוב אוטומטי לסרטוני ריילס</p>
+            <p className="text-white text-[11px] tracking-[0.05em] font-light uppercase">Automatic Dubbing for Reels</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4 bg-[#0c0c0c]/40 p-8 rounded-[24px] border border-white/5 backdrop-blur-xl w-full">
             <input 
@@ -816,7 +816,7 @@ export default function Home() {
 
           {/* Words per line selector */}
           <div className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl px-4 py-3">
-            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0 select-none" dir="rtl">עד __ מילים</span>
+            <span className="text-[7px] uppercase tracking-[0.3em] text-white/30 font-bold shrink-0 select-none">UP TO __ WORDS</span>
             <div className="flex-1 flex items-center justify-center gap-1.5">
               {[1, 2, 3, 4, 5].map((n) => (
                 <button

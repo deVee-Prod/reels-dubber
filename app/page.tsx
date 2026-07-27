@@ -624,9 +624,9 @@ export default function Home() {
         <h1 className="text-[10px] font-bold tracking-[0.5em] uppercase text-white/60">REELS DUBBER</h1>
       </header>
 
-      <main className="w-full max-w-2xl mx-auto flex flex-col items-center flex-1 px-4 md:px-6 space-y-3 md:space-y-5 py-4 md:py-6">
-        <div className="w-full space-y-3 md:space-y-5">
-          <div className="relative w-full h-[48vh] md:h-auto md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
+      <main className="w-full max-w-2xl mx-auto flex flex-col items-center flex-1 justify-center px-4 md:px-6 space-y-4 md:space-y-6 py-6">
+        <div className="w-full space-y-4 md:space-y-6">
+          <div className="relative w-full h-[40vh] md:h-auto md:aspect-video bg-[#0c0c0c] border border-white/[0.03] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl flex items-center justify-center">
             {videoPreview ? (
               <div className="relative w-full h-full cursor-pointer" onClick={togglePlay}>
                 <video ref={audioRef} src={videoPreview} preload="auto" style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} playsInline onLoadedData={() => { lastDrawnTimeRef.current = -1; }} onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} />

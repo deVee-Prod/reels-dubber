@@ -612,7 +612,7 @@ export default function Home() {
             <button type="submit" className="w-full py-3 bg-[#A855F7] text-white rounded-xl uppercase tracking-[0.3em] text-[8px] font-black">Enter</button>
           </form>
         </main>
-        <LabelFooter />
+
       </div>
     );
   }

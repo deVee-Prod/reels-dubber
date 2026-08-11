@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function POST(req: NextRequest) {
   // בדיקת cookie — חייב להיות הערך המדויק ש-/api/auth מנפיק, לא רק קיום השם
   const cookie = req.cookies.get('session_access');
   if (cookie?.value !== 'granted') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json({ error: 'OPENAI_API_KEY is not set on the server' }, { status: 500 });
+  }
+
+  // Built per request, like reels-motion does. At module scope the OpenAI
+  // constructor runs during `next build` and fails whenever the key is absent,
+  // which made the build depend on having production secrets to hand.
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   try {
     const formData = await req.formData();

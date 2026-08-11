@@ -6,7 +6,8 @@ import Timeline from './components/Timeline';
 
 const FONTS = [
   { id: 'NotoSansTight',       label: 'Noto Tight',   file: '/NotoSansTight.ttf'          },
-  { id: 'Heebo',               label: 'Heebo Black',         file: '/Heebo.ttf'                  },
+  { id: 'HeeboExtraBold',      label: 'Heebo XBold',   file: '/Heebo-ExtraBold.ttf'        },
+  { id: 'Heebo',               label: 'Heebo Black',   file: '/Heebo.ttf'                  },
   { id: 'RubikBlack',          label: 'Rubik Black',   file: '/Rubik-Black.ttf'            },
   { id: 'SecularOne',          label: 'Secular One',   file: '/SecularOne-Regular.ttf'     },
   { id: 'VarelaRound',         label: 'Varela Round',  file: '/VarelaRound-Regular.ttf'    },
@@ -81,7 +82,7 @@ export default function Home() {
   const [enablePump, setEnablePump] = useState(false);
   const [globalOffset, setGlobalOffset] = useState(0); 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [fontFamily, setFontFamily] = useState<FontId>('Heebo');
+  const [fontFamily, setFontFamily] = useState<FontId>('HeeboExtraBold');
   const [loadedFonts, setLoadedFonts] = useState<Set<string>>(new Set());
   const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
   const [wordsPerLine, setWordsPerLine] = useState(2);
@@ -95,7 +96,7 @@ export default function Home() {
   const lastWordRef = useRef<string>("");
   // Refs so syncAndDraw always reads live values without closing over stale state
   const subtitlePosRef = useRef(30);
-  const fontFamilyRef  = useRef<FontId>('Heebo');
+  const fontFamilyRef  = useRef<FontId>('HeeboExtraBold');
   const wordsPerLineRef = useRef(2);
   // Tracks current time for both the seek bar and the Timeline (iOS: audio.currentTime lags when paused)
   const currentTimeRef = useRef(0);

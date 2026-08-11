@@ -1,14 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function POST(req: Request) {
-  // בדיקת cookie — בלי cookie אין גישה
-  const cookie = req.headers.get('cookie') || '';
-  if (!cookie.includes('session_access')) {
+export async function POST(req: NextRequest) {
+  // בדיקת cookie — חייב להיות הערך המדויק ש-/api/auth מנפיק, לא רק קיום השם
+  const cookie = req.cookies.get('session_access');
+  if (cookie?.value !== 'granted') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

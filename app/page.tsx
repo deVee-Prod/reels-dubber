@@ -6,7 +6,7 @@ import Timeline from './components/Timeline';
 
 const FONTS = [
   { id: 'NotoSansTight',       label: 'Noto Tight',   file: '/NotoSansTight.ttf'          },
-  { id: 'Heebo',               label: 'Heebo',         file: '/Heebo.ttf'                  },
+  { id: 'Heebo',               label: 'Heebo Black',         file: '/Heebo.ttf'                  },
   { id: 'RubikBlack',          label: 'Rubik Black',   file: '/Rubik-Black.ttf'            },
   { id: 'SecularOne',          label: 'Secular One',   file: '/SecularOne-Regular.ttf'     },
   { id: 'VarelaRound',         label: 'Varela Round',  file: '/VarelaRound-Regular.ttf'    },
@@ -78,10 +78,10 @@ export default function Home() {
   const [duration, setDuration] = useState(0); 
   const [subtitlePos, setSubtitlePos] = useState(30);
   const [fontScale, setFontScale] = useState(0.6);
-  const [enablePump, setEnablePump] = useState(true);
+  const [enablePump, setEnablePump] = useState(false);
   const [globalOffset, setGlobalOffset] = useState(0); 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [fontFamily, setFontFamily] = useState<FontId>('NotoSansTight');
+  const [fontFamily, setFontFamily] = useState<FontId>('Heebo');
   const [loadedFonts, setLoadedFonts] = useState<Set<string>>(new Set());
   const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
   const [wordsPerLine, setWordsPerLine] = useState(2);
@@ -95,7 +95,7 @@ export default function Home() {
   const lastWordRef = useRef<string>("");
   // Refs so syncAndDraw always reads live values without closing over stale state
   const subtitlePosRef = useRef(30);
-  const fontFamilyRef  = useRef<FontId>('NotoSansTight');
+  const fontFamilyRef  = useRef<FontId>('Heebo');
   const wordsPerLineRef = useRef(2);
   // Tracks current time for both the seek bar and the Timeline (iOS: audio.currentTime lags when paused)
   const currentTimeRef = useRef(0);
@@ -204,7 +204,7 @@ export default function Home() {
             const borderW = Math.max(2, Math.round(2.4 * (canvas.height / 500)));
 
             ctx.save();
-            ctx.font = `900 ${fontSize}px "${fontFamilyRef.current}", sans-serif`;
+            ctx.font = `${fontSize}px "${fontFamilyRef.current}", sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
 

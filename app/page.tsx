@@ -77,7 +77,7 @@ export default function Home() {
   const [canUndo, setCanUndo] = useState(false);
   const [currentTime, setCurrentTime] = useState(0); 
   const [duration, setDuration] = useState(0); 
-  const [subtitlePos, setSubtitlePos] = useState(30);
+  const [subtitlePos, setSubtitlePos] = useState(15);
   const [fontScale, setFontScale] = useState(0.6);
   const [enablePump, setEnablePump] = useState(false);
   const [globalOffset, setGlobalOffset] = useState(0); 
@@ -95,7 +95,7 @@ export default function Home() {
   const requestRef = useRef<number>(null);
   const lastWordRef = useRef<string>("");
   // Refs so syncAndDraw always reads live values without closing over stale state
-  const subtitlePosRef = useRef(30);
+  const subtitlePosRef = useRef(15);
   const fontFamilyRef  = useRef<FontId>('HeeboExtraBold');
   const wordsPerLineRef = useRef(2);
   // Tracks current time for both the seek bar and the Timeline (iOS: audio.currentTime lags when paused)
